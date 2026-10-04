@@ -10,7 +10,7 @@ move-folders:
 # is fetched as an external at package time.
 
 manual-changelog:
-  filename: PlayerReviews/CHANGELOG.md
+  filename: CHANGELOG.md
   markup-type: markdown
 
 ignore:
