@@ -277,7 +277,7 @@ function ReviewPrompt:BuildFrame()
     outer:SetHeight(windowSettings.height)
     outer:ReleaseChildren()
     outer:SetTitle(self.editingReviewID
-        and ("Edit Entry: " .. addon:GetShortName(data.nameRealm))
+        and ("Edit Note: " .. addon:GetShortName(data.nameRealm))
         or string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.shownCount, self.batchTotal))
     outer:Show()
 
@@ -597,9 +597,9 @@ function ReviewPrompt:AddDetails(frame, data)
 
     local reason
     if self.editingReviewID then
-        reason = "Fight stats and chat aren't available when editing a saved entry."
+        reason = "Fight stats and chat aren't available when editing a saved note."
     elseif not data.guid then
-        reason = "This entry was started by name, so no fight stats or chat were captured. They're only recorded while you're grouped with someone."
+        reason = "This note was started by name, so no fight stats or chat were captured. They're only recorded while you're grouped with someone."
     else
         reason = "No fights or chat were recorded while you were grouped with this player."
     end
@@ -1035,7 +1035,7 @@ function ReviewPrompt:AddChatLogSection(frame, data)
 
     local heading = AceGUI:Create("Label")
     heading:SetFullWidth(true)
-    heading:SetText("Chat while grouped (saved with this entry):")
+    heading:SetText("Chat while grouped (saved with this note):")
     frame:AddChild(heading)
 
     local lines = {}

@@ -276,7 +276,7 @@ function PlayerReview:OnInitialize()
     for _ in pairs(self.db.global.sessions) do sessionCount = sessionCount + 1 end
 
     self:Print(string.format(
-        "Loaded %d player(s), %d entries, %d session(s) from SavedVariables.", playerCount, reviewCount, sessionCount))
+        "Loaded %d player(s), %d notes, %d session(s) from SavedVariables.", playerCount, reviewCount, sessionCount))
 
     self:RegisterEvent("WHO_LIST_UPDATE", "OnWhoListUpdate")
     -- Recent Allies events: pcall'd since registering an event this
@@ -414,7 +414,7 @@ function PlayerReview:SlashCommand(input)
         self:Print("Minimap button " .. (mm.hide and "hidden (/aj minimap shows it again)." or "shown."))
     elseif cmd == "recentallydebug" then
         self.recentAllyDebug = not self.recentAllyDebug
-        self:Print("Recent Allies sync debug " .. (self.recentAllyDebug and "ON - save/edit an entry and check chat for what SetRecentAllyPinned/SetRecentAllyNote actually returned." or "off."))
+        self:Print("Recent Allies sync debug " .. (self.recentAllyDebug and "ON - save/edit a note and check chat for what SetRecentAllyPinned/SetRecentAllyNote actually returned." or "off."))
     elseif cmd == "allyinfo" then
         self:DumpRecentAllyDetails(rest)
     elseif cmd == "badgetest" then
@@ -426,23 +426,23 @@ function PlayerReview:SlashCommand(input)
     else
         self:Print("Usage:")
         self:Print("  /aj - open your journal")
-        self:Print("  /aj queue [unit] - force-queue a real entry for a unit (default: target), skipping the time gate")
-        self:Print("  /aj queuename <Name> or <Name-Realm> - queue an entry by name alone, for players you can't target (e.g. an LFG listing)")
+        self:Print("  /aj queue [unit] - force-queue a real note for a unit (default: target), skipping the time gate")
+        self:Print("  /aj queuename <Name> or <Name-Realm> - queue a note by name alone, for players you can't target (e.g. an LFG listing)")
         self:Print("  /aj gate [minutes] - show or set the grouped-time gate (set to 0 to test real triggers instantly)")
         self:Print("  /aj lfgoffset [x y] - show or set the Group Finder tooltip's x/y offset live")
         self:Print("  /aj options (or /aj config) - open the settings window")
-        self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/entries) without opening the browser")
+        self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/notes) without opening the browser")
         self:Print("  /aj minimap - show or hide the minimap button")
-        self:Print("  /aj pinjournal - pin every player with an entry who isn't pinned in Recent Allies yet (skips anyone with a bad rating unless that's turned on in /aj options)")
-        self:Print("  /aj resyncrecentallies - re-applies the pin/note to every journaled player's C_RecentAllies entry using their latest entry, for entries saved before the name-based GUID fallback existed")
+        self:Print("  /aj pinjournal - pin every player with a note who isn't pinned in Recent Allies yet (skips anyone with a bad rating unless that's turned on in /aj options)")
+        self:Print("  /aj resyncrecentallies - re-applies the pin/note to every journaled player's C_RecentAllies entry using their latest note, for notes saved before the name-based GUID fallback existed")
         if self.db.global.settings.developerTools then
             self:Print("Developer tools (/aj dev turns these off):")
-            self:Print("  /aj export - show all entry data as copyable text, to back them up")
+            self:Print("  /aj export - show all note data as copyable text, to back them up")
             self:Print("  /aj import - paste back a previous /aj export; merges in, never overwrites existing data")
-            self:Print("  /aj test - queue a fake entry window, no group needed (tests the UI only)")
+            self:Print("  /aj test - queue a fake note window, no group needed (tests the UI only)")
             self:Print("  /aj testgroup - like /aj test but with 3 fake fights and 4 fake group members, to test the fight checklist and DPS bar chart without needing anyone else")
             self:Print("  /aj capturesave [unit] - save real captured fight data for a unit (default: target) as copyable text, to replay later via /aj capturereplay")
-            self:Print("  /aj capturereplay - paste back a previous /aj capturesave and open an entry window using that exact real data, for repeated UI testing")
+            self:Print("  /aj capturereplay - paste back a previous /aj capturesave and open a note window using that exact real data, for repeated UI testing")
             self:Print("  /pr menudebug - toggle printing every right-click menu tag seen, to debug the context menu button")
             self:Print("  /pr namedebug - toggle printing what the name-recolor hook sees, to debug the floating name color")
             self:Print("  /pr lfgdebug - toggle printing Group Finder scan results (rows found, matches, badges shown)")
@@ -456,7 +456,7 @@ function PlayerReview:SlashCommand(input)
             self:Print("  /aj findname [unit] - scan all frames for the floating name text itself, wherever it lives (default: target)")
             self:Print("  /aj findtext <text> - like findname, but for text not tied to a unit (e.g. a Group Finder listing name)")
             self:Print("  /aj inspectframe <GlobalFrameName> - dump a named frame's regions, e.g. TargetFrame, CompactPartyFrameMember1")
-            self:Print("  /aj recentallies - dump C_RecentAllies system status + every cached entry, and cross-check it against your players with entries, into a copyable window")
+            self:Print("  /aj recentallies - dump C_RecentAllies system status + every cached entry, and cross-check it against your players with notes, into a copyable window")
             self:Print("  /pr recentallydebug - toggle live logging of what SetRecentAllyPinned/SetRecentAllyNote actually return when a review is saved, to debug a pin/note that isn't sticking")
             self:Print("  /aj allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) into a copyable window; defaults to the selected player or your target")
             self:Print("  /aj badgetest - toggle a fake badge on every party/raid frame found, to check placement without a group")
@@ -466,9 +466,9 @@ end
 
 function PlayerReview:PrintStorageStats()
     local s = self:GetStorageStats()
-    self:Print(string.format("%d player(s), %d session(s), %d entries.",
+    self:Print(string.format("%d player(s), %d session(s), %d notes.",
         s.playerCount, s.sessionCount, s.reviewCount))
-    self:Print(string.format("Chat %s | Sessions %s | Entries %s | Players %s | Total %s",
+    self:Print(string.format("Chat %s | Sessions %s | Notes %s | Players %s | Total %s",
         self:FormatBytes(s.chatBytes), self:FormatBytes(s.sessionsBytes),
         self:FormatBytes(s.reviewsBytes), self:FormatBytes(s.playersBytes), self:FormatBytes(s.totalBytes)))
 end
@@ -504,7 +504,7 @@ function PlayerReview:ResyncAllRecentAllies(quiet, onlyUnpinned)
         end
     end
     if not quiet then
-        self:Print(string.format("Resynced %d of %d player(s) with entries to Recent Allies (the rest have no matching Recent Allies entry right now).", synced, total))
+        self:Print(string.format("Resynced %d of %d player(s) with notes to Recent Allies (the rest have no matching Recent Allies entry right now).", synced, total))
     end
 end
 
@@ -957,7 +957,7 @@ function PlayerReview:DumpRecentAllies()
     end
 
     table.insert(lines, "")
-    table.insert(lines, "-- Cross-check against players with entries (short-name match, same as Browser.lua) --")
+    table.insert(lines, "-- Cross-check against players with notes (short-name match, same as Browser.lua) --")
     for _, record in ipairs(self:GetAllPlayers()) do
         local shortName = self:GetShortName(record.nameRealm)
         local found = false

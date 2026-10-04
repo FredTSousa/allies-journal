@@ -348,7 +348,7 @@ function RosterTracker:OnRosterUpdate()
                         link = "|c" .. classColor.colorStr .. link .. "|r"
                     end
                     addon:Print(string.format(
-                        "Finished grouping with %s - %s together, %s in combat. Right-click their name to add an entry.",
+                        "Finished grouping with %s - %s together, %s in combat. Right-click their name to add a note.",
                         link, FormatDuration(groupedSeconds), FormatDuration(combatSeconds)))
                 end
             end

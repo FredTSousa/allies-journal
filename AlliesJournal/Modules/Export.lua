@@ -48,7 +48,7 @@ function Export:ShowImport()
         self.importFrame = frame
 
         local box = AceGUI:Create("MultiLineEditBox")
-        box:SetLabel("Paste a previous /aj export here, then click Import. Existing data is kept - only new entries are added.")
+        box:SetLabel("Paste a previous /aj export here, then click Import. Existing data is kept - only new notes are added.")
         box:SetFullWidth(true)
         box:SetNumLines(16)
         frame:AddChild(box)
@@ -61,7 +61,7 @@ function Export:ShowImport()
             local text = self.importBox:GetText()
             local ok, a, b, settingsRestored, sessionsMerged = addon:ImportData(text)
             if ok then
-                addon:Print(string.format("Import complete: %d player(s) merged, %d new entries, %d new session(s) added%s.",
+                addon:Print(string.format("Import complete: %d player(s) merged, %d new notes, %d new session(s) added%s.",
                     a, b, sessionsMerged or 0, settingsRestored and ", settings restored" or ""))
                 addon:GetModule("Browser"):RefreshIfShown()
                 pcall(function() addon:GetModule("Options"):Refresh() end)
@@ -93,7 +93,7 @@ function Export:ShowCaptureReplay()
         self.replayFrame = frame
 
         local box = AceGUI:Create("MultiLineEditBox")
-        box:SetLabel("Paste a previous /aj capturesave output here, then click Load. Opens an entry window using that exact fight data.")
+        box:SetLabel("Paste a previous /aj capturesave output here, then click Load. Opens a note window using that exact fight data.")
         box:SetFullWidth(true)
         box:SetNumLines(16)
         frame:AddChild(box)

@@ -226,7 +226,7 @@ local function AddReviewMenuButtons(tag, owner, rootDescription, contextData)
     if unit and not issecretvalue(unit) and UnitExists(unit) and UnitIsPlayer(unit) then
         if UnitIsUnit(unit, "player") then return end -- skip your own menu
 
-        rootDescription:CreateButton("Journal Entry", function()
+        rootDescription:CreateButton("Add Note", function()
             addon:QueueUnitForReview(unit)
         end)
 
@@ -254,7 +254,7 @@ local function AddReviewMenuButtons(tag, owner, rootDescription, contextData)
     local nameRealm = addon:NormalizeChatSender(rawName)
     if not nameRealm or nameRealm == addon:GetPlayerName() then return end
 
-    rootDescription:CreateButton("Journal Entry", function()
+    rootDescription:CreateButton("Add Note", function()
         -- If they left the group recently enough to still have a
         -- recentDepartures snapshot (see RosterTracker), use it - that
         -- carries their real fight/chat data instead of an empty manual
@@ -353,7 +353,7 @@ function Tooltip:SetupUnitMenus()
     if self.menusRegistered then return end
 
     if not Menu or not Menu.ModifyMenu then
-        addon:Print("Unit context menu hook unavailable - Menu.ModifyMenu not found on this client. Right-click 'Journal Entry'/'View Journal' won't appear; use /aj queue [unit] instead.")
+        addon:Print("Unit context menu hook unavailable - Menu.ModifyMenu not found on this client. Right-click 'Add Note'/'View Journal' won't appear; use /aj queue [unit] instead.")
         return
     end
 

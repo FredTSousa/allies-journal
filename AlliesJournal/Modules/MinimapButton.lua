@@ -30,7 +30,7 @@ function MinimapButton:OnEnable()
         end,
         OnTooltipShow = function(tooltip)
             tooltip:AddLine("Allies Journal")
-            tooltip:AddLine("Left-click: open entries", 1, 1, 1)
+            tooltip:AddLine("Left-click: open notes", 1, 1, 1)
             tooltip:AddLine("Right-click: options", 1, 1, 1)
             tooltip:AddLine("Drag: move this button", 0.6, 0.6, 0.6)
         end,

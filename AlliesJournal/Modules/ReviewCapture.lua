@@ -322,7 +322,7 @@ end
 -- a copyable window, so what's already been accumulated this session can
 -- be inspected without waiting for a fresh fight.
 function ReviewCapture:DumpState()
-    local lines = { "-- EntryCapture.fights (guid -> fight list) --" }
+    local lines = { "-- ReviewCapture.fights (guid -> fight list) --" }
     for guid, fights in pairs(self.fights) do
         for i, fight in ipairs(fights) do
             table.insert(lines, string.format("%s fight[%d]: duration=%s dps=%s hps=%s",
@@ -330,7 +330,7 @@ function ReviewCapture:DumpState()
         end
     end
     table.insert(lines, "")
-    table.insert(lines, "-- EntryCapture.combatSeconds (guid -> seconds) --")
+    table.insert(lines, "-- ReviewCapture.combatSeconds (guid -> seconds) --")
     for guid, seconds in pairs(self.combatSeconds) do
         table.insert(lines, string.format("%s: %ss", guid, tostring(seconds)))
     end
