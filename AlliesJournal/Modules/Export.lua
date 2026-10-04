@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local Export = addon:NewModule("Export")
 local AceGUI = LibStub("AceGUI-3.0")
 

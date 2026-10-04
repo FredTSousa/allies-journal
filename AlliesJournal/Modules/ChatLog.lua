@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local ChatLog = addon:NewModule("ChatLog", "AceEvent-3.0")
 
 local MAX_MESSAGES_PER_PLAYER = 15

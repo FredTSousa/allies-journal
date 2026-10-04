@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local Options = addon:NewModule("Options")
 local AceGUI = LibStub("AceGUI-3.0")
 
@@ -308,7 +308,7 @@ local function BuildGeneral(scroll)
         resetBtn:SetText("Reset all settings to defaults")
         resetBtn:SetWidth(240)
         resetBtn:SetCallback("OnClick", function()
-            StaticPopup_Show("PLAYERREVIEW_RESET_SETTINGS")
+            StaticPopup_Show("ALLIESJOURNAL_RESET_SETTINGS")
         end)
         group:AddChild(resetBtn)
     end)
@@ -506,7 +506,7 @@ function Options:ResetAll()
     self:Show()  -- rebuild so every control reflects the reset values
 end
 
-StaticPopupDialogs["PLAYERREVIEW_RESET_SETTINGS"] = {
+StaticPopupDialogs["ALLIESJOURNAL_RESET_SETTINGS"] = {
     text = "Reset every Allies Journal setting to its default?\n\nYour notes and player data are not affected.",
     button1 = YES,
     button2 = NO,

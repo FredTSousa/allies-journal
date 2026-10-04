@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local WhoCheck = addon:NewModule("WhoCheck", "AceEvent-3.0")
 
 -- Checks, with /who, whether players that Recent Allies has no entry for

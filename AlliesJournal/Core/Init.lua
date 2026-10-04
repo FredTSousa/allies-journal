@@ -1,4 +1,4 @@
-PlayerReview = LibStub("AceAddon-3.0"):NewAddon("PlayerReview", "AceEvent-3.0", "AceConsole-3.0")
+AlliesJournal = LibStub("AceAddon-3.0"):NewAddon("AlliesJournal", "AceEvent-3.0", "AceConsole-3.0")
 
 -- Persistence is hand-rolled (no AceDB-3.0): this addon never used AceDB's
 -- profiles/namespaces, just a flat `global` table, so a plain table with
@@ -18,7 +18,7 @@ end
 -- are only taken from the old data when the account has none yet (the first
 -- character to log in). The old data is left exactly as it was, and a flag
 -- on it means this runs once per character.
-function PlayerReview.MergeLegacyCharacterData(g)
+function AlliesJournal.MergeLegacyCharacterData(g)
     local legacy = PRTrackerDB
     if type(legacy) ~= "table" or legacy.migratedToAccount then return end
     local old = legacy.global
@@ -64,25 +64,25 @@ function PlayerReview.MergeLegacyCharacterData(g)
     legacy.migratedToAccount = true
 end
 
-function PlayerReview:OnInitialize()
-    -- Renamed from PlayerReviewDB/"PlayerReviewAddon" to PRTrackerDB/
-    -- "PRTracker" as a test in itself: every persistence test under the
-    -- PlayerReviewAddon name failed, including a raw pre-AceAddon
-    -- ADDON_LOADED check with zero framework involvement - while a
-    -- brand-new, unrelated addon (PersistTest) persisted correctly on the
-    -- very same client. This checks whether the client has some corrupted/
-    -- stale state tied specifically to the old name, accumulated across
-    -- many .toc and SavedVariables changes this session.
-    --
-    -- Reviews are account-wide (PRTrackerAccountDB, one set shared by every
-    -- character). PRTrackerDB is the OLD per-character store: it's still
-    -- declared in the .toc and left untouched as a backup, and each
-    -- character's copy is merged into the account data once (see
-    -- MergeLegacyCharacterData).
-    PRTrackerAccountDB = PRTrackerAccountDB or {}
-    PRTrackerAccountDB.global = PRTrackerAccountDB.global or {}
-    local g = PRTrackerAccountDB.global
-    PlayerReview.MergeLegacyCharacterData(g)
+function AlliesJournal:OnInitialize()
+    -- Saved data lives in AlliesJournalDB, one account-wide set shared by
+    -- every character. Earlier versions (Player Reviews) saved it as
+    -- PRTrackerAccountDB, which the .toc still declares so it can be read
+    -- here: it is moved over once (the very same table, now saved under the
+    -- new name) and the old variable is dropped so it isn't stored twice.
+    -- PRTrackerDB is the OLD per-character store: still declared and left
+    -- untouched as a backup, and each character's copy is merged into the
+    -- account data once (see MergeLegacyCharacterData).
+    AlliesJournalDB = AlliesJournalDB or {}
+    if type(PRTrackerAccountDB) == "table" and type(PRTrackerAccountDB.global) == "table" then
+        if not (type(AlliesJournalDB.global) == "table" and next(AlliesJournalDB.global) ~= nil) then
+            AlliesJournalDB.global = PRTrackerAccountDB.global
+            PRTrackerAccountDB = nil
+        end
+    end
+    AlliesJournalDB.global = AlliesJournalDB.global or {}
+    local g = AlliesJournalDB.global
+    AlliesJournal.MergeLegacyCharacterData(g)
     g.players = g.players or {}    -- [nameRealm] = playerRecord
     g.reviews = g.reviews or {}    -- [reviewId]  = review
     g.sessions = g.sessions or {}  -- [sessionId] = session (see RosterTracker's session-eligibility gate)
@@ -149,7 +149,7 @@ function PlayerReview:OnInitialize()
         g.settings.browserColorsVersion = 3
     end
     g.settings.browserColors = g.settings.browserColors or {}
-    for key, color in pairs(PlayerReview.DEFAULT_BROWSER_COLORS) do
+    for key, color in pairs(AlliesJournal.DEFAULT_BROWSER_COLORS) do
         g.settings.browserColors[key] = g.settings.browserColors[key] or { unpack(color) }
     end
     -- Recent Allies pinning: players with a bad rating are not pinned
@@ -222,20 +222,20 @@ function PlayerReview:OnInitialize()
         -- field from before the split; reuse it as the world template's
         -- starting point if present, so an existing customization isn't
         -- silently lost.
-        t.worldTemplate = t.worldTemplate or t.template or PlayerReview.DEFAULT_WORLD_TOOLTIP_TEMPLATE
-        t.lfgTemplate = t.lfgTemplate or PlayerReview.DEFAULT_LFG_TOOLTIP_TEMPLATE
+        t.worldTemplate = t.worldTemplate or t.template or AlliesJournal.DEFAULT_WORLD_TOOLTIP_TEMPLATE
+        t.lfgTemplate = t.lfgTemplate or AlliesJournal.DEFAULT_LFG_TOOLTIP_TEMPLATE
         -- A template that's still exactly the first-version default (color
         -- codes aside) was never edited, so it picks up the new default
         -- (role icon + date + place); an edited one is left alone.
         local function Plain(s) return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
-        for _, old in ipairs({ PlayerReview.OLD_WORLD_TOOLTIP_TEMPLATE, PlayerReview.OLD_WORLD_TOOLTIP_TEMPLATE_2 }) do
+        for _, old in ipairs({ AlliesJournal.OLD_WORLD_TOOLTIP_TEMPLATE, AlliesJournal.OLD_WORLD_TOOLTIP_TEMPLATE_2 }) do
             if Plain(t.worldTemplate) == Plain(old) then
-                t.worldTemplate = PlayerReview.DEFAULT_WORLD_TOOLTIP_TEMPLATE
+                t.worldTemplate = AlliesJournal.DEFAULT_WORLD_TOOLTIP_TEMPLATE
             end
         end
-        for _, old in ipairs({ PlayerReview.OLD_LFG_TOOLTIP_TEMPLATE, PlayerReview.OLD_LFG_TOOLTIP_TEMPLATE_2 }) do
+        for _, old in ipairs({ AlliesJournal.OLD_LFG_TOOLTIP_TEMPLATE, AlliesJournal.OLD_LFG_TOOLTIP_TEMPLATE_2 }) do
             if Plain(t.lfgTemplate) == Plain(old) then
-                t.lfgTemplate = PlayerReview.DEFAULT_LFG_TOOLTIP_TEMPLATE
+                t.lfgTemplate = AlliesJournal.DEFAULT_LFG_TOOLTIP_TEMPLATE
             end
         end
         -- superseded by the two fields above
@@ -287,7 +287,7 @@ function PlayerReview:OnInitialize()
     C_Timer.After(25, function() self:OnRecentAlliesReady() end)
 end
 
-function PlayerReview:OnEnable()
+function AlliesJournal:OnEnable()
     self:Print("loaded. Type /aj to open your journal, or /aj help for all commands.")
 end
 
@@ -319,7 +319,7 @@ local DEV_COMMANDS = {
     import = true,
 }
 
-function PlayerReview:SlashCommand(input)
+function AlliesJournal:SlashCommand(input)
     input = strtrim(input or "")
     local cmd, rest = input:match("^(%S*)%s*(.-)$")
     cmd = cmd:lower()
@@ -464,7 +464,7 @@ function PlayerReview:SlashCommand(input)
     end
 end
 
-function PlayerReview:PrintStorageStats()
+function AlliesJournal:PrintStorageStats()
     local s = self:GetStorageStats()
     self:Print(string.format("%d player(s), %d session(s), %d notes.",
         s.playerCount, s.sessionCount, s.reviewCount))
@@ -484,13 +484,13 @@ end
 -- ally but isn't pinned yet - self-heals reviews saved while the pin
 -- couldn't stick. Runs on RECENT_ALLIES_DATA_READY, or after 25s if that
 -- already fired before we registered.
-function PlayerReview:OnRecentAlliesReady()
+function AlliesJournal:OnRecentAlliesReady()
     if self.autoResyncDone then return end
     self.autoResyncDone = true
     C_Timer.After(3, function() self:ResyncAllRecentAllies(true, true) end)
 end
 
-function PlayerReview:ResyncAllRecentAllies(quiet, onlyUnpinned)
+function AlliesJournal:ResyncAllRecentAllies(quiet, onlyUnpinned)
     local total, synced = 0, 0
     for _, record in ipairs(self:GetAllPlayers()) do
         total = total + 1
@@ -514,7 +514,7 @@ end
 -- the note, and finally the entire raw record. Matches by (partial,
 -- case-insensitive) name against fullName; with no name it uses the player
 -- selected in /pr, else your target.
-function PlayerReview:DumpRecentAllyDetails(query)
+function AlliesJournal:DumpRecentAllyDetails(query)
     if not C_RecentAllies then
         self:Print("C_RecentAllies doesn't exist on this client.")
         return
@@ -587,7 +587,7 @@ end
 -- keeping on the 89-day pin list. Reports what it did, including players
 -- Blizzard has no Recent Allies entry for (nothing to pin until they have
 -- one). Pins that don't stick right away are retried by SyncRecentAlly.
-function PlayerReview:PinReviewedAllies()
+function AlliesJournal:PinReviewedAllies()
     local pinned, queued, alreadyPinned, skippedBad, notKnown = 0, 0, 0, 0, 0
     for _, record in ipairs(self:GetAllPlayers()) do
         local review = self:GetLatestReview(record.nameRealm)
@@ -619,7 +619,7 @@ end
 -- involved - just exercises ReviewPrompt's UI, validation, and Save/Skip
 -- flow (and writes a real DB entry for "Testmann-<yourrealm>" on Save, same
 -- as any other review).
-function PlayerReview:QueueTestReview()
+function AlliesJournal:QueueTestReview()
     self:GetModule("ReviewPrompt"):QueueBatch({
         {
             nameRealm = "Testmann-" .. GetRealmName(),
@@ -638,7 +638,7 @@ end
 -- way without asking someone else to group up. Numbers are randomized
 -- (not fixed) so re-running this gives a fresh mix each time, closer to
 -- what real variance looks like.
-function PlayerReview:QueueTestGroupReview()
+function AlliesJournal:QueueTestGroupReview()
     local myRealm = GetRealmName()
     local fakeMembers = {
         { guid = "Fake-1", nameRealm = "Testmann-" .. myRealm, class = "WARRIOR", role = "tank" },
@@ -718,7 +718,7 @@ end
 -- review prompt using that EXACT real data - lets a real captured
 -- scenario (actual DPS numbers, actual group members) be replayed
 -- repeatedly for UI testing without needing to regroup with anyone.
-function PlayerReview:ReplayCapturedFights(text)
+function AlliesJournal:ReplayCapturedFights(text)
     text = text and strtrim(text) or ""
     if text == "" then
         self:Print("No data pasted.")
@@ -753,7 +753,7 @@ end
 -- mouseover, ...), bypassing the groupedSince time gate entirely. Reads role
 -- and any fights captured so far the same way the real triggers do, so this
 -- exercises the actual capture pipeline without waiting on it.
-function PlayerReview:QueueUnitForReview(unit)
+function AlliesJournal:QueueUnitForReview(unit)
     if not UnitExists(unit) then
         self:Print("No such unit: " .. unit)
         return
@@ -788,7 +788,7 @@ end
 -- than blocks on a miss: /who can legitimately miss a real player (server
 -- throttling, connected-realm quirks, them going offline mid-lookup), so a
 -- failed lookup isn't strong enough evidence to refuse the review outright.
-function PlayerReview:QueueNameForReview(nameRealm)
+function AlliesJournal:QueueNameForReview(nameRealm)
     nameRealm = strtrim(nameRealm or "")
     if nameRealm == "" then
         self:Print("Usage: /aj queuename <Name> or <Name-Realm>")
@@ -825,7 +825,7 @@ function PlayerReview:QueueNameForReview(nameRealm)
     end)
 end
 
-function PlayerReview:OnWhoListUpdate()
+function AlliesJournal:OnWhoListUpdate()
     local nameRealm = self.pendingWhoNameRealm
     if not nameRealm then return end
     local shortName = self.pendingWhoShortName
@@ -864,7 +864,7 @@ function PlayerReview:OnWhoListUpdate()
     self:DoQueueNameForReview(nameRealm)
 end
 
-function PlayerReview:DoQueueNameForReview(nameRealm)
+function AlliesJournal:DoQueueNameForReview(nameRealm)
     self:GetModule("ReviewPrompt"):QueueBatch({
         {
             nameRealm = nameRealm,
@@ -884,7 +884,7 @@ end
 -- into a copyable window (Export module) rather than chat, since a table
 -- can easily have more keys than are practical to read off scrolling chat
 -- output or capture in a screenshot.
-function PlayerReview:DumpGlobalTable(name)
+function AlliesJournal:DumpGlobalTable(name)
     name = strtrim(name or "")
     if name == "" then
         self:Print("Usage: /aj dump <GlobalTableName> (e.g. /aj dump C_LFGList)")
@@ -917,7 +917,7 @@ end
 -- REVIEWED player against that list using the exact short-name match
 -- Browser.lua's FindRecentAlly uses, so a mismatch is directly visible
 -- rather than guessed at.
-function PlayerReview:DumpRecentAllies()
+function AlliesJournal:DumpRecentAllies()
     if not C_RecentAllies then
         self:Print("C_RecentAllies doesn't exist on this client.")
         return
@@ -977,7 +977,7 @@ function PlayerReview:DumpRecentAllies()
     self:GetModule("Export"):ShowText("Recent Allies Debug", table.concat(lines, "\n"))
 end
 
-function PlayerReview:HandleGateCommand(rest)
+function AlliesJournal:HandleGateCommand(rest)
     if rest == "" then
         self:Print("Gate is currently " .. self.db.global.settings.gateMinutes .. " minute(s).")
         return

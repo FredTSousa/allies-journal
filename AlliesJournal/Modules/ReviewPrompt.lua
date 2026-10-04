@@ -1,7 +1,7 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local ReviewPrompt = addon:NewModule("ReviewPrompt")
 local AceGUI = LibStub("AceGUI-3.0")
-local L = LibStub("AceLocale-3.0"):GetLocale("PlayerReview")
+local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
 local RATING_ORDER = { "good", "average", "bad" }
 local RATING_LABELS = { good = "Good", average = "Average", bad = "Bad" }

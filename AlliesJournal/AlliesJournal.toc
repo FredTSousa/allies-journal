@@ -6,7 +6,7 @@
 ## Version: @project-version@
 ## Category: Social
 ## IconTexture: Interface\COMMON\FavoritesIcon
-## SavedVariables: PRTrackerAccountDB
+## SavedVariables: AlliesJournalDB, PRTrackerAccountDB
 ## SavedVariablesPerCharacter: PRTrackerDB
 ## DefaultState: Enabled
 ## X-Website: https://github.com/FredTSousa/allies-journal

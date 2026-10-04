@@ -1,7 +1,7 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local Browser = addon:NewModule("Browser")
 local AceGUI = LibStub("AceGUI-3.0")
-local L = LibStub("AceLocale-3.0"):GetLocale("PlayerReview")
+local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
 local ROLE_FILTERS = { "All", "tank", "healer", "dps" }
 
@@ -482,7 +482,7 @@ local function InfoTextFor(allyData)
     return table.concat(parts, ", ")
 end
 
-StaticPopupDialogs["PLAYERREVIEW_DELETE_REVIEW"] = {
+StaticPopupDialogs["ALLIESJOURNAL_DELETE_REVIEW"] = {
     text = "Delete this note for %s (%s)?",
     button1 = YES,
     button2 = NO,
@@ -503,7 +503,7 @@ StaticPopupDialogs["PLAYERREVIEW_DELETE_REVIEW"] = {
 -- dialog's own %s substitution, which Blizzard caps at two args) since
 -- the confirmation needs to show count/day-threshold/bytes-freed all at
 -- once - see Browser:ShowCleanupConfirm.
-StaticPopupDialogs["PLAYERREVIEW_CLEANUP_SESSIONS"] = {
+StaticPopupDialogs["ALLIESJOURNAL_CLEANUP_SESSIONS"] = {
     text = "%s",
     button1 = YES,
     button2 = NO,
@@ -833,7 +833,7 @@ function Browser:ShowCleanupConfirm()
         "Remove %d old session(s) from players without notes (older than %d days)?\nFrees about %s.\nSessions for players with notes are never included.",
         #eligible, days, addon:FormatBytes(bytesFreed))
 
-    StaticPopup_Show("PLAYERREVIEW_CLEANUP_SESSIONS", message, nil, { eligible = eligible })
+    StaticPopup_Show("ALLIESJOURNAL_CLEANUP_SESSIONS", message, nil, { eligible = eligible })
 end
 
 -- /who every listed player Recent Allies has no entry for.
@@ -1177,7 +1177,7 @@ function Browser:ShowHistory(nameRealm)
         deleteBtn:SetText(L["Delete"])
         deleteBtn:SetWidth(70)
         deleteBtn:SetCallback("OnClick", function()
-            StaticPopup_Show("PLAYERREVIEW_DELETE_REVIEW", addon:GetShortName(nameRealm), dateStr,
+            StaticPopup_Show("ALLIESJOURNAL_DELETE_REVIEW", addon:GetShortName(nameRealm), dateStr,
                 { nameRealm = nameRealm, reviewID = reviewID })
         end)
         row:AddChild(deleteBtn)

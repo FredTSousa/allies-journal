@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 
 -- Player list colors, each {r, g, b, a}: the window behind everything, the
 -- darker panel behind the cards, and the card backgrounds by state.
@@ -654,13 +654,13 @@ end
 -- list rows can be wider than their visible content, or subject to
 -- ScrollBox clipping the row's own edges don't reflect).
 function addon:ShowReviewBadge(frame, review, size, anchorPoint, relPoint, xOff, yOff, anchorTo)
-    local badge = frame.PlayerReviewBadge
+    local badge = frame.AlliesJournalBadge
     if not badge then
         -- Sublevel 7 is the highest OVERLAY sublevel, so this draws above
         -- any of the row/frame's own icons that might otherwise sit on top
         -- of a plain sublevel-0 texture in the same screen area.
         badge = frame:CreateTexture(nil, "OVERLAY", nil, 7)
-        frame.PlayerReviewBadge = badge
+        frame.AlliesJournalBadge = badge
     end
     -- Size applied every call, not just on creation, so /pr options size
     -- changes take effect on already-created badges the next scan/refresh
@@ -708,8 +708,8 @@ function addon:ShowReviewBadge(frame, review, size, anchorPoint, relPoint, xOff,
 end
 
 function addon:HideReviewBadge(frame)
-    if frame.PlayerReviewBadge then
-        frame.PlayerReviewBadge:Hide()
+    if frame.AlliesJournalBadge then
+        frame.AlliesJournalBadge:Hide()
     end
 end
 

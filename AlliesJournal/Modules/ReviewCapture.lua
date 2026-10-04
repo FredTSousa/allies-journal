@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local ReviewCapture = addon:NewModule("ReviewCapture", "AceEvent-3.0")
 
 -- guid -> { {duration=, dps=, hps=, interrupts=, dispels=, deaths=}, ... }

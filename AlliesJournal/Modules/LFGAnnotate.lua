@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local LFGAnnotate = addon:NewModule("LFGAnnotate", "AceEvent-3.0")
 
 -- Mouse-wheel scrolling is covered instantly by the OnMouseWheel hook
@@ -105,7 +105,7 @@ local function FindActivityFontString(frame, entries)
     local candidates = {}
     for _, entry in ipairs(entries) do
         local region = entry.region
-        if region and region ~= frame.PlayerReviewAreaText and region:GetParent() == frame
+        if region and region ~= frame.AlliesJournalAreaText and region:GetParent() == frame
             and entry.text and entry.text ~= "" then
             local ok, top, left = pcall(function() return region:GetTop(), region:GetLeft() end)
             if ok and top and left then
@@ -136,7 +136,7 @@ end
 -- another listing's area). If the activity text can't be found it falls
 -- back to a fixed corner of the row (settings.lfg.loc*).
 local function UpdateRowLocation(frame, area, activityFS)
-    local text = frame.PlayerReviewAreaText
+    local text = frame.AlliesJournalAreaText
     if not area then
         if text then text:Hide() end
         return
@@ -145,7 +145,7 @@ local function UpdateRowLocation(frame, area, activityFS)
     if not text then
         text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         text:SetTextColor(0.62, 0.78, 1)
-        frame.PlayerReviewAreaText = text
+        frame.AlliesJournalAreaText = text
     end
     text:ClearAllPoints()
     if activityFS then
@@ -160,16 +160,16 @@ local function UpdateRowLocation(frame, area, activityFS)
 end
 
 local function SetupRowHover(row)
-    if row.PlayerReviewHoverHooked then return end
+    if row.AlliesJournalHoverHooked then return end
 
     local ok, err = pcall(function()
         row:HookScript("OnEnter", function(self)
-            local review = self.PlayerReviewCurrent
+            local review = self.AlliesJournalCurrent
             if LFGAnnotate.debug then
                 addon:Print(string.format("[lfg debug] OnEnter fired, self=%s, review=%s", tostring(self), tostring(review ~= nil)))
             end
             if not review then return end
-            AppendReviewToTooltip(self, review, self.PlayerReviewNameRealm, self.PlayerReviewMemberNote)
+            AppendReviewToTooltip(self, review, self.AlliesJournalNameRealm, self.AlliesJournalMemberNote)
         end)
 
         -- Missing in a recent edit - without this, nothing ever hides the
@@ -188,7 +188,7 @@ local function SetupRowHover(row)
         return
     end
 
-    row.PlayerReviewHoverHooked = true
+    row.AlliesJournalHoverHooked = true
 end
 
 -- Checks EVERY member of one group (not just the leader/poster) against
@@ -264,14 +264,14 @@ local function UpdateRowBadge(row, textCounter, activeFrames)
                     UpdateRowLocation(innerFrame, area, area and FindActivityFontString(innerFrame, entries))
 
                     if review then
-                        innerFrame.PlayerReviewCurrent = review
-                        innerFrame.PlayerReviewNameRealm = addon:NormalizeChatSender(memberName)
+                        innerFrame.AlliesJournalCurrent = review
+                        innerFrame.AlliesJournalNameRealm = addon:NormalizeChatSender(memberName)
                         -- Blank for the leader/poster (redundant - the
                         -- row already shows their name); a real value
                         -- when a DIFFERENT group member is the
                         -- reviewed one, since that's not otherwise
                         -- visible anywhere on the row.
-                        innerFrame.PlayerReviewMemberNote = (not isLeader)
+                        innerFrame.AlliesJournalMemberNote = (not isLeader)
                             and ("|cffffd100Group member:|r " .. memberName) or ""
                         SetupRowHover(innerFrame)
                         local b = addon.db.global.settings.badge
@@ -298,9 +298,9 @@ local function UpdateRowBadge(row, textCounter, activeFrames)
                         addon:HideReviewBadge(innerFrame)
                         -- Recycled frame: don't leave the previous
                         -- listing's review for the hover to pick up.
-                        innerFrame.PlayerReviewCurrent = nil
-                        innerFrame.PlayerReviewNameRealm = nil
-                        innerFrame.PlayerReviewMemberNote = nil
+                        innerFrame.AlliesJournalCurrent = nil
+                        innerFrame.AlliesJournalNameRealm = nil
+                        innerFrame.AlliesJournalMemberNote = nil
                     end
                 elseif LFGAnnotate.debug then
                     addon:Print(string.format("[lfg debug] resultID=%d found on frame but GetSearchResultInfo failed: ok=%s info=%s",

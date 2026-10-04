@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local Tooltip = addon:NewModule("Tooltip", "AceEvent-3.0")
 
 

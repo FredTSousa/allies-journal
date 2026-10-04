@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local MinimapButton = addon:NewModule("MinimapButton")
 
 -- The minimap button comes from LibDBIcon (the standard one most addons

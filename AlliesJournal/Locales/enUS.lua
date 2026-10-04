@@ -1,4 +1,4 @@
-local L = LibStub("AceLocale-3.0"):NewLocale("PlayerReview", "enUS", true)
+local L = LibStub("AceLocale-3.0"):NewLocale("AlliesJournal", "enUS", true)
 if not L then return end
 
 L["Social"] = "Social"

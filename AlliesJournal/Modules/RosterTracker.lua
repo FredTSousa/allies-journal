@@ -1,4 +1,4 @@
-local addon = PlayerReview
+local addon = AlliesJournal
 local RosterTracker = addon:NewModule("RosterTracker", "AceEvent-3.0")
 
 RosterTracker.roster = {}         -- guid -> { nameRealm, unit, role }
@@ -74,10 +74,10 @@ end
 
 -- Saves the dungeon run in progress so a /reload (or logout and straight
 -- back in) doesn't start a fresh run with no fights and a restarted time
--- gate. Kept outside `global` (in PRTrackerAccountDB.runCache) so it never
+-- gate. Kept outside `global` (in AlliesJournalDB.runCache) so it never
 -- ends up in an export, and cleared whenever there's nothing to save.
 function RosterTracker:OnLogout()
-    local db = PRTrackerAccountDB
+    local db = AlliesJournalDB
     if not db then return end
     db.runCache = nil
     local runId = self.currentRunId
@@ -109,7 +109,7 @@ end
 -- relog) inside the dungeon the saved run was in, carry on with it instead
 -- of starting a new one. Returns true when it did.
 function RosterTracker:TryRestoreRun()
-    local db = PRTrackerAccountDB
+    local db = AlliesJournalDB
     local cache = db and db.runCache
     if not cache then return false end
     db.runCache = nil  -- used up either way; saved again at the next logout
