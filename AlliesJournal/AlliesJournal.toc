@@ -9,7 +9,7 @@
 ## SavedVariables: PRTrackerAccountDB
 ## SavedVariablesPerCharacter: PRTrackerDB
 ## DefaultState: Enabled
-## X-Website: https://github.com/FredTSousa/Player-reviews
+## X-Website: https://github.com/FredTSousa/allies-journal
 ## X-Curse-Project-ID: 1725957
 ## X-WoWI-ID: 0
 ## X-Wago-ID: 0

@@ -4,7 +4,7 @@ A World of Warcraft addon that works like a private journal of the players you g
 
 I used to add players I liked as friends, and ended up with a huge list of names I couldn't place. This pins them in Blizzard's Recent Allies list with your note instead.
 
-> **Beta.** Allies Journal is new and has only been tested on the Forever client. If something breaks, please [open an issue](https://github.com/FredTSousa/player-reviews/issues) with what you were doing and any error text (BugSack or `/console scriptErrors 1` helps).
+> **Beta.** Allies Journal is new and has only been tested on the Forever client. If something breaks, please [open an issue](https://github.com/FredTSousa/allies-journal/issues) with what you were doing and any error text (BugSack or `/console scriptErrors 1` helps).
 
 ## What it does
 
