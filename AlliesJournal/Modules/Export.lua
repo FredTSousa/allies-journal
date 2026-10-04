@@ -8,7 +8,7 @@ function Export:ShowExport()
     if not self.exportFrame then
         local frame = AceGUI:Create("Window")
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
-        frame:SetTitle("Player Reviews - Export")
+        frame:SetTitle("Allies Journal - Export")
         frame:SetLayout("Flow")
         frame:SetWidth(520)
         frame:SetHeight(440)
@@ -16,7 +16,7 @@ function Export:ShowExport()
         self.exportFrame = frame
 
         local box = AceGUI:Create("MultiLineEditBox")
-        box:SetLabel("Ctrl+A, Ctrl+C to copy - save this somewhere safe. Restore it later with /pr import.")
+        box:SetLabel("Ctrl+A, Ctrl+C to copy - save this somewhere safe. Restore it later with /aj import.")
         box:SetFullWidth(true)
         box:SetNumLines(20)
         frame:AddChild(box)
@@ -40,7 +40,7 @@ function Export:ShowImport()
     if not self.importFrame then
         local frame = AceGUI:Create("Window")
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
-        frame:SetTitle("Player Reviews - Import")
+        frame:SetTitle("Allies Journal - Import")
         frame:SetLayout("Flow")
         frame:SetWidth(520)
         frame:SetHeight(460)
@@ -48,7 +48,7 @@ function Export:ShowImport()
         self.importFrame = frame
 
         local box = AceGUI:Create("MultiLineEditBox")
-        box:SetLabel("Paste a previous /pr export here, then click Import. Existing data is kept - only new entries are added.")
+        box:SetLabel("Paste a previous /aj export here, then click Import. Existing data is kept - only new entries are added.")
         box:SetFullWidth(true)
         box:SetNumLines(16)
         frame:AddChild(box)
@@ -61,7 +61,7 @@ function Export:ShowImport()
             local text = self.importBox:GetText()
             local ok, a, b, settingsRestored, sessionsMerged = addon:ImportData(text)
             if ok then
-                addon:Print(string.format("Import complete: %d player(s) merged, %d new review(s), %d new session(s) added%s.",
+                addon:Print(string.format("Import complete: %d player(s) merged, %d new entries, %d new session(s) added%s.",
                     a, b, sessionsMerged or 0, settingsRestored and ", settings restored" or ""))
                 addon:GetModule("Browser"):RefreshIfShown()
                 pcall(function() addon:GetModule("Options"):Refresh() end)
@@ -85,7 +85,7 @@ function Export:ShowCaptureReplay()
     if not self.replayFrame then
         local frame = AceGUI:Create("Window")
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
-        frame:SetTitle("Player Reviews - Replay Captured Fights")
+        frame:SetTitle("Allies Journal - Replay Captured Fights")
         frame:SetLayout("Flow")
         frame:SetWidth(520)
         frame:SetHeight(460)
@@ -93,7 +93,7 @@ function Export:ShowCaptureReplay()
         self.replayFrame = frame
 
         local box = AceGUI:Create("MultiLineEditBox")
-        box:SetLabel("Paste a previous /pr capturesave output here, then click Load. Opens a review prompt using that exact fight data.")
+        box:SetLabel("Paste a previous /aj capturesave output here, then click Load. Opens an entry window using that exact fight data.")
         box:SetFullWidth(true)
         box:SetNumLines(16)
         frame:AddChild(box)
@@ -135,7 +135,7 @@ function Export:ShowText(title, text)
         self.textBox = box
     end
 
-    self.textFrame:SetTitle(title or "Player Reviews")
+    self.textFrame:SetTitle(title or "Allies Journal")
     self.textBox:SetText(text)
     self.textFrame:Show()
 

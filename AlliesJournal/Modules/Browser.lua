@@ -80,7 +80,7 @@ local ROLE_FILTER_LABELS = { All = "All", tank = "Tank", healer = "Healer", dps 
 local SOURCE_FILTERS = { "All", "recent", "other" }
 local SOURCE_FILTER_LABELS = { All = "All", recent = "In Recent Allies", other = "Not in Recent Allies" }
 local RATING_FILTERS = { "All", "good", "average", "bad", "none" }
-local RATING_FILTER_LABELS = { All = "All", good = "Good", average = "Average", bad = "Bad", none = "Not reviewed" }
+local RATING_FILTER_LABELS = { All = "All", good = "Good", average = "Average", bad = "Bad", none = "No entry" }
 
 local function ReviewClass(review)
     if not review then return "none" end
@@ -483,7 +483,7 @@ local function InfoTextFor(allyData)
 end
 
 StaticPopupDialogs["PLAYERREVIEW_DELETE_REVIEW"] = {
-    text = "Delete this review of %s (%s)?",
+    text = "Delete this journal entry for %s (%s)?",
     button1 = YES,
     button2 = NO,
     OnAccept = function(_, data)
@@ -565,7 +565,7 @@ function Browser:Show()
     if not self.frame then
         local frame = AceGUI:Create("Window")
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
-        frame:SetTitle("Player Reviews")
+        frame:SetTitle("Allies Journal")
         frame:SetLayout("Flow")
         local size = addon.db.global.settings.browserWindow
         frame:SetWidth(size.width)
@@ -685,7 +685,7 @@ function Browser:Refresh()
     buttonRow:AddChild(refreshBtn)
 
     local pinBtn = AceGUI:Create("Button")
-    pinBtn:SetText("Pin Reviewed")
+    pinBtn:SetText("Pin Journal")
     pinBtn:SetWidth(120)
     pinBtn:SetCallback("OnClick", function()
         addon:PinReviewedAllies()
@@ -736,7 +736,7 @@ function Browser:Refresh()
     frame:AddChild(roleDropdown)
 
     local ratingDropdown = AceGUI:Create("Dropdown")
-    ratingDropdown:SetLabel("Review")
+    ratingDropdown:SetLabel("Rating")
     ratingDropdown:SetWidth(120)
     ratingDropdown:SetList(RATING_FILTER_LABELS, RATING_FILTERS)
     ratingDropdown:SetValue(self.ratingFilter)
@@ -814,7 +814,7 @@ function Browser:RefreshStats()
     if not self.statsLabel then return end
     local s = addon:GetStorageStats()
     self.statsLabel:SetText(string.format(
-        "%d player(s) | %d session(s) | %d review(s)\nChat %s  ·  Sessions %s  ·  Reviews %s  ·  Players %s  ·  Total %s",
+        "%d player(s) | %d session(s) | %d entries\nChat %s  ·  Sessions %s  ·  Entries %s  ·  Players %s  ·  Total %s",
         s.playerCount, s.sessionCount, s.reviewCount,
         addon:FormatBytes(s.chatBytes), addon:FormatBytes(s.sessionsBytes),
         addon:FormatBytes(s.reviewsBytes), addon:FormatBytes(s.playersBytes), addon:FormatBytes(s.totalBytes)))
@@ -825,12 +825,12 @@ function Browser:ShowCleanupConfirm()
     local eligible, bytesFreed = addon:PreviewSessionCleanup(days)
 
     if #eligible == 0 then
-        addon:Print(string.format("Nothing eligible for cleanup right now (sessions older than %d days, unreviewed players only).", days))
+        addon:Print(string.format("Nothing eligible for cleanup right now (sessions older than %d days, players without entries only).", days))
         return
     end
 
     local message = string.format(
-        "Remove %d old session(s) from unreviewed players (older than %d days)?\nFrees about %s.\nSessions for reviewed players are never included.",
+        "Remove %d old session(s) from players without entries (older than %d days)?\nFrees about %s.\nSessions for players with entries are never included.",
         #eligible, days, addon:FormatBytes(bytesFreed))
 
     StaticPopup_Show("PLAYERREVIEW_CLEANUP_SESSIONS", message, nil, { eligible = eligible })
@@ -1080,7 +1080,7 @@ function Browser:ShowHistory(nameRealm)
     end
 
     local reviewsGroup = AceGUI:Create("InlineGroup")
-    reviewsGroup:SetTitle("Reviews")
+    reviewsGroup:SetTitle("Entries")
     reviewsGroup:SetLayout("List")
     reviewsGroup:SetFullWidth(true)
     detail:AddChild(reviewsGroup)
@@ -1088,7 +1088,7 @@ function Browser:ShowHistory(nameRealm)
     local reviews = addon:GetReviewsForPlayer(nameRealm)
     if #reviews == 0 then
         local empty = AceGUI:Create("Label")
-        empty:SetText("No reviews yet.")
+        empty:SetText("No entries yet.")
         empty:SetFullWidth(true)
         reviewsGroup:AddChild(empty)
     end
@@ -1138,7 +1138,7 @@ function Browser:ShowHistory(nameRealm)
                     date("%H:%M", msg.time), msg.from == "self" and "You" or addon:GetShortName(nameRealm),
                     msg.channel, msg.text))
             end
-            if #lines == 0 then lines = { "(no chat captured for this review)" } end
+            if #lines == 0 then lines = { "(no chat captured for this entry)" } end
             addon:GetModule("Export"):ShowText("Chat - " .. nameRealm .. " - " .. dateStr, table.concat(lines, "\n"))
         end)
         row:AddChild(chatBtn)
@@ -1153,7 +1153,7 @@ function Browser:ShowHistory(nameRealm)
                     date("%Y-%m-%d %H:%M", interaction.timestamp or 0), interaction.description or "?",
                     (InteractionDetails(interaction):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))))
             end
-            if #lines == 0 then lines = { "(Recent Allies has nothing logged for this player during this review's session)" } end
+            if #lines == 0 then lines = { "(Recent Allies has nothing logged for this player during this entry's session)" } end
             addon:GetModule("Export"):ShowText("Together - " .. nameRealm .. " - " .. dateStr, table.concat(lines, "\n"))
         end)
         -- Duplicates the "Together (Recent Allies)" section above, so it

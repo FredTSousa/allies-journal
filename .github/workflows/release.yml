@@ -4,7 +4,7 @@ name: Package and release
 # WoWInterface and Wago whenever a version tag is pushed (e.g. v1.0.0).
 # Each upload is skipped unless its token secret is set in the repository
 # settings (CF_API_TOKEN, WOWI_API_TOKEN, WAGO_API_TOKEN) AND the matching
-# X-*-ID in PlayerReviews/PlayerReviews.toc is filled in. A GitHub release is
+# X-*-ID in AlliesJournal/AlliesJournal.toc is filled in. A GitHub release is
 # created from the same zip.
 
 on:
@@ -26,6 +26,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the packager reads tags and history for the version
-      # The addon lives in the PlayerReviews/ subfolder; .pkgmeta (move-folders)
+      # The addon lives in the AlliesJournal/ subfolder; .pkgmeta (move-folders)
       # tells the packager how to build the zip from it.
       - uses: BigWigsMods/packager@v2

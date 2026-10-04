@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## AllowLoadGameType: camelot
-## Title: Player Reviews
-## Notes: Rate the players you group with, see their reviews on frames, tooltips and Group Finder, and keep your history.
+## Title: Allies Journal
+## Notes: A private journal of the players you group with: notes and session history, pinned in Recent Allies and shown in Group Finder, on frames and in tooltips. Everything stays on your computer.
 ## Author: FredTSousa
 ## Version: @project-version@
 ## Category: Social

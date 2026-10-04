@@ -35,9 +35,19 @@ addon.OLD_LFG_TOOLTIP_TEMPLATE = table.concat({
     "|cffffd100Reviewed ({count})|r", "{memberNote}", "Social: {social}", "{socialNote}", "Perf: {performance}", "{performanceNote}",
 }, "\n")
 
+-- Defaults from 0.1.x ("Reviewed"), for the same upgrade check.
+addon.OLD_WORLD_TOOLTIP_TEMPLATE_2 = table.concat({
+    " ", "{roleIcon}|cffffd100Reviewed ({count})|r  |cff808080{date}|r", "|cff808080{encounter}|r",
+    "Social: {social}", "{socialNote}", "Perf: {performance}", "{performanceNote}",
+}, "\n")
+addon.OLD_LFG_TOOLTIP_TEMPLATE_2 = table.concat({
+    "{roleIcon}|cffffd100Reviewed ({count})|r  |cff808080{date}|r", "{memberNote}",
+    "Social: {social}", "{socialNote}", "Perf: {performance}", "{performanceNote}",
+}, "\n")
+
 addon.DEFAULT_WORLD_TOOLTIP_TEMPLATE = table.concat({
     " ",
-    "{roleIcon}|cffffd100Reviewed ({count})|r  |cff808080{date}|r",
+    "{roleIcon}|cffffd100Journal ({count})|r  |cff808080{date}|r",
     "|cff808080{encounter}|r",
     "Social: {social}",
     "{socialNote}",
@@ -46,7 +56,7 @@ addon.DEFAULT_WORLD_TOOLTIP_TEMPLATE = table.concat({
 }, "\n")
 
 addon.DEFAULT_LFG_TOOLTIP_TEMPLATE = table.concat({
-    "{roleIcon}|cffffd100Reviewed ({count})|r  |cff808080{date}|r",
+    "{roleIcon}|cffffd100Journal ({count})|r  |cff808080{date}|r",
     -- Blank for the leader/poster (their name's already on the row);
     -- shows "Group member: X" when the reviewed match is someone ELSE
     -- already in the group, since that's not otherwise visible anywhere.
@@ -297,7 +307,7 @@ end
 function addon:SyncRecentAlly(guid, review, nameRealm, quiet)
     if not self:ShouldPinReview(review) then
         if not quiet then
-            self:Print((self:GetShortName(nameRealm) or "Player") .. " has a bad rating, so they aren't pinned in Recent Allies (change this in /pr options).")
+            self:Print((self:GetShortName(nameRealm) or "Player") .. " has a bad rating, so they aren't pinned in Recent Allies (change this in /aj options).")
         end
         return false
     end
@@ -361,7 +371,7 @@ function addon:RetryRecentAlly(guid, isLast, onlyEntry)
     elseif isLast then
         self.pendingRecentAllies[guid] = nil
         if not pending.quiet then
-            self:Print(string.format("Couldn't pin %s in Recent Allies - Blizzard doesn't seem to know them yet, or the pin list may be full. /pr resyncrecentallies tries again.", pending.name))
+            self:Print(string.format("Couldn't pin %s in Recent Allies - Blizzard doesn't seem to know them yet, or the pin list may be full. /aj resyncrecentallies tries again.", pending.name))
         end
     end
 end

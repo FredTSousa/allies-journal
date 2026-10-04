@@ -1,12 +1,12 @@
-package-as: PlayerReviews
+package-as: AlliesJournal
 
-# The addon lives in the PlayerReviews/ subfolder of this repo, so move its
+# The addon lives in the AlliesJournal/ subfolder of this repo, so move its
 # contents up to the package root. Everything else in the repo (README,
 # workflow, assets) is ignored below and never ends up in the zip.
 move-folders:
-  PlayerReviews/PlayerReviews: PlayerReviews
+  AlliesJournal/AlliesJournal: AlliesJournal
 
-# The libraries in PlayerReviews/Libs/ are committed to the repo, so nothing
+# The libraries in AlliesJournal/Libs/ are committed to the repo, so nothing
 # is fetched as an external at package time.
 
 manual-changelog:

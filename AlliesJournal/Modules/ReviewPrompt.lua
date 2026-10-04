@@ -277,8 +277,8 @@ function ReviewPrompt:BuildFrame()
     outer:SetHeight(windowSettings.height)
     outer:ReleaseChildren()
     outer:SetTitle(self.editingReviewID
-        and ("Edit Review: " .. addon:GetShortName(data.nameRealm))
-        or string.format("Review: %s   %d of %d", addon:GetShortName(data.nameRealm), self.shownCount, self.batchTotal))
+        and ("Edit Entry: " .. addon:GetShortName(data.nameRealm))
+        or string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.shownCount, self.batchTotal))
     outer:Show()
 
     -- Scrollable so a long form doesn't overflow the fixed-height window.
@@ -597,9 +597,9 @@ function ReviewPrompt:AddDetails(frame, data)
 
     local reason
     if self.editingReviewID then
-        reason = "Fight stats and chat aren't available when editing a saved review."
+        reason = "Fight stats and chat aren't available when editing a saved entry."
     elseif not data.guid then
-        reason = "This review was started by name, so no fight stats or chat were captured. They're only recorded while you're grouped with someone."
+        reason = "This entry was started by name, so no fight stats or chat were captured. They're only recorded while you're grouped with someone."
     else
         reason = "No fights or chat were recorded while you were grouped with this player."
     end
@@ -644,7 +644,7 @@ function ReviewPrompt:AddFightSelectionSection(frame, data)
     -- re-flows to match.
     local chartHeading = AceGUI:Create("Label")
     chartHeading:SetFullWidth(true)
-    chartHeading:SetText("Group DPS (selected fights) - highlighted background is who you're reviewing:")
+    chartHeading:SetText("Group DPS (selected fights) - highlighted background is who you're writing about:")
     frame:AddChild(chartHeading)
 
     local chartContainer = AceGUI:Create("SimpleGroup")
@@ -1035,7 +1035,7 @@ function ReviewPrompt:AddChatLogSection(frame, data)
 
     local heading = AceGUI:Create("Label")
     heading:SetFullWidth(true)
-    heading:SetText("Chat while grouped (saved with this review):")
+    heading:SetText("Chat while grouped (saved with this entry):")
     frame:AddChild(heading)
 
     local lines = {}

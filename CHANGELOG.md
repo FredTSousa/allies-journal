@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.0-beta
+
+- Renamed from Player Reviews to **Allies Journal**: it's a private journal of the people you group with, not a score. The addon folder is now `AlliesJournal`, the commands are `/aj`, `/alliesjournal` and `/journal` (`/pr` still works), and the wording in the window, tooltips and options talks about journal entries instead of reviews.
+- **If you were using Player Reviews:** your saved data is stored under the addon folder's name. Close the game, copy `WTF/.../SavedVariables/PlayerReviews.lua` to `AlliesJournal.lua` (in the account folder and in each character's folder), then delete the old `PlayerReviews` addon folder.
+
 ## 0.1.1-beta
 
 - The minimum time you need to be grouped with someone before a review window opens (10 minutes by default) is now a slider in `/pr options`, on the Sessions tab.

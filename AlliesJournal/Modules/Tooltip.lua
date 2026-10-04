@@ -226,13 +226,13 @@ local function AddReviewMenuButtons(tag, owner, rootDescription, contextData)
     if unit and not issecretvalue(unit) and UnitExists(unit) and UnitIsPlayer(unit) then
         if UnitIsUnit(unit, "player") then return end -- skip your own menu
 
-        rootDescription:CreateButton("Review Player", function()
+        rootDescription:CreateButton("Journal Entry", function()
             addon:QueueUnitForReview(unit)
         end)
 
         local nameRealm = addon:GetFullName(unit)
         if nameRealm and addon:GetLatestReview(nameRealm) then
-            rootDescription:CreateButton("View Reviews", function()
+            rootDescription:CreateButton("View Journal", function()
                 addon:GetModule("Browser"):ShowPlayer(nameRealm)
             end)
         end
@@ -254,7 +254,7 @@ local function AddReviewMenuButtons(tag, owner, rootDescription, contextData)
     local nameRealm = addon:NormalizeChatSender(rawName)
     if not nameRealm or nameRealm == addon:GetPlayerName() then return end
 
-    rootDescription:CreateButton("Review Player", function()
+    rootDescription:CreateButton("Journal Entry", function()
         -- If they left the group recently enough to still have a
         -- recentDepartures snapshot (see RosterTracker), use it - that
         -- carries their real fight/chat data instead of an empty manual
@@ -268,7 +268,7 @@ local function AddReviewMenuButtons(tag, owner, rootDescription, contextData)
     end)
 
     if addon:GetLatestReview(nameRealm) then
-        rootDescription:CreateButton("View Reviews", function()
+        rootDescription:CreateButton("View Journal", function()
             addon:GetModule("Browser"):ShowPlayer(nameRealm)
         end)
     end
@@ -353,7 +353,7 @@ function Tooltip:SetupUnitMenus()
     if self.menusRegistered then return end
 
     if not Menu or not Menu.ModifyMenu then
-        addon:Print("Unit context menu hook unavailable - Menu.ModifyMenu not found on this client. Right-click 'Review Player'/'View Reviews' won't appear; use /pr queue [unit] instead.")
+        addon:Print("Unit context menu hook unavailable - Menu.ModifyMenu not found on this client. Right-click 'Journal Entry'/'View Journal' won't appear; use /aj queue [unit] instead.")
         return
     end
 
@@ -553,7 +553,7 @@ end
 -- Finder listing, which you can't target or run UnitName() on.
 function Tooltip:FindText(text)
     if not text or text == "" then
-        addon:Print("Usage: /pr findtext <text to search for>")
+        addon:Print("Usage: /aj findtext <text to search for>")
         return
     end
     ScanForText(UIParent, "UIParent", text)
@@ -566,7 +566,7 @@ end
 -- C_NamePlate at all.
 function Tooltip:InspectFrame(frameName)
     if not frameName or frameName == "" then
-        addon:Print("Usage: /pr inspectframe <GlobalFrameName>  e.g. TargetFrame, PlayerFrame, CompactPartyFrameMember1")
+        addon:Print("Usage: /aj inspectframe <GlobalFrameName>  e.g. TargetFrame, PlayerFrame, CompactPartyFrameMember1")
         return
     end
 

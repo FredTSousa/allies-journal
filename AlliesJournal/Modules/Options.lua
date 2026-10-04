@@ -14,14 +14,14 @@ local TEMPLATE_HELP = table.concat({
     " ",
     "Placeholders (used as {name}):",
     "  {social} / {performance} - colored Good/Average/Bad text",
-    "  {socialNote} / {performanceNote} - the review's notes. A line containing ONLY one of these is dropped entirely when that note is empty.",
-    "  {count} - how many reviews this player has",
-    "  {author} - who wrote the most recent review",
-    "  {date} - that review's date (YYYY-MM-DD)",
+    "  {socialNote} / {performanceNote} - the entry's notes. A line containing ONLY one of these is dropped entirely when that note is empty.",
+    "  {count} - how many entries this player has",
+    "  {author} - who wrote the most recent entry",
+    "  {date} - that entry's date (YYYY-MM-DD)",
     "  {encounter} - what was happening when it was written",
     "  {role} - the role recorded on it, if any",
     "  {roleIcon} - the tank/healer/DPS icon for that role (blank when there is none)",
-    "  {memberNote} - Group Finder template ONLY. Blank when the reviewed player is the group's leader/poster; otherwise \"Group member: Name\" for whichever other member matched (checked via the real group roster, not just the listing's poster).",
+    "  {memberNote} - Group Finder template ONLY. Blank when the player with an entry is the group's leader/poster; otherwise \"Group member: Name\" for whichever other member matched (checked via the real group roster, not just the listing's poster).",
 }, "\n")
 
 -- Settings are grouped into tabs, and each group into a titled section box.
@@ -175,8 +175,8 @@ end
 local function BuildGeneral(scroll)
     local settings = addon.db.global.settings
 
-    Section(scroll, "Review window", function(group)
-        AddNote(group, "Size of the window that opens to review a player. Changes apply to an open window right away.")
+    Section(scroll, "Journal entry window", function(group)
+        AddNote(group, "Size of the window that opens to write about a player. Changes apply to an open window right away.")
         local reviewWindow = settings.reviewWindow
         AddSlider(group, "Width", 350, 900, 10,
             function() return reviewWindow.width end,
@@ -194,7 +194,7 @@ local function BuildGeneral(scroll)
 
     Section(scroll, "Player list", function(group)
         local browserList = settings.browserList
-        AddNote(group, "Size of the /pr window. You can also drag its bottom-right corner; the new size is remembered.")
+        AddNote(group, "Size of the /aj window. You can also drag its bottom-right corner; the new size is remembered.")
         local browserWindow = settings.browserWindow
         AddSlider(group, "Window width", 460, 1000, 10,
             function() return browserWindow.width end,
@@ -224,14 +224,14 @@ local function BuildGeneral(scroll)
                 lfgSettings.showLocation = v
                 addon:GetModule("LFGAnnotate"):ScanBrowseResults()
             end)
-        AddNote(group, "Shown as \"Wailing Caverns - The Barrens\" on every listing, reviewed or not.")
+        AddNote(group, "Shown as \"Wailing Caverns - The Barrens\" on every listing, with or without an entry.")
     end)
 
     Section(scroll, "Recent Allies", function(group)
         AddCheckbox(group, "Also pin players I rated Bad",
             function() return settings.recentAllies.pinBad end,
             function(v) settings.recentAllies.pinBad = v end)
-        AddNote(group, "Reviewed players are pinned in Blizzard's Recent Allies list with a short note. By default a player with a Bad social or performance rating is left out. This applies everywhere a pin is made: saving a review, regrouping, Pin Reviewed, and resyncing. It doesn't remove pins that already exist.")
+        AddNote(group, "Players with entries are pinned in Blizzard's Recent Allies list with a short note. By default a player with a Bad social or performance rating is left out. This applies everywhere a pin is made: saving an entry, regrouping, Pin Journal, and resyncing. It doesn't remove pins that already exist.")
     end)
 
     Section(scroll, "Minimap button", function(group)
@@ -242,22 +242,22 @@ local function BuildGeneral(scroll)
                 minimapSettings.hide = not v
                 addon:GetModule("MinimapButton"):Refresh()
             end)
-        AddNote(group, "Left-click opens your reviews, right-click opens these options, drag to move it. /pr minimap also toggles it.")
+        AddNote(group, "Left-click opens your entries, right-click opens these options, drag to move it. /aj minimap also toggles it.")
     end)
 
     Section(scroll, "Chat", function(group)
         local departureSummary = settings.departureSummary
-        AddCheckbox(group, "Announce a recap when someone leaves before a review would show",
+        AddCheckbox(group, "Announce a recap when someone leaves before an entry would show",
             function() return departureSummary.enabled end,
             function(v) departureSummary.enabled = v end)
-        AddNote(group, "Right-clicking their name always offers \"Review Player\" with their real fight and chat data attached, whether or not the announcement is on.")
+        AddNote(group, "Right-clicking their name always offers \"Journal Entry\" with their real fight and chat data attached, whether or not the announcement is on.")
     end)
 
     -- Developer tools are switched on with a hidden slash command only; the
     -- extra settings below just appear while they're on.
     if settings.developerTools then
         Section(scroll, "Player list colors (developer)", function(group)
-            AddNote(group, "Colors and opacity of the /pr window. Changes show on an open window right away.")
+            AddNote(group, "Colors and opacity of the /aj window. Changes show on an open window right away.")
             local Browser = addon:GetModule("Browser")
             for _, entry in ipairs(addon.BROWSER_COLOR_LABELS) do
                 local key, label = entry[1], entry[2]
@@ -303,7 +303,7 @@ local function BuildGeneral(scroll)
     end
 
     Section(scroll, "Reset", function(group)
-        AddNote(group, "Puts every setting on all tabs back to its default. Your reviews and player data are not touched.")
+        AddNote(group, "Puts every setting on all tabs back to its default. Your entries and player data are not touched.")
         local resetBtn = AceGUI:Create("Button")
         resetBtn:SetText("Reset all settings to defaults")
         resetBtn:SetWidth(240)
@@ -319,8 +319,8 @@ local function BuildSessions(scroll)
     local sessionGate = settings.sessionGate
     local retention = settings.retention
 
-    Section(scroll, "When a review window opens", function(group)
-        AddNote(group, "After a dungeon, or when someone leaves your group, a review window opens for anyone you were grouped with for at least this long. Shorter than this, you only get a recap line in chat, and you can still right-click their name to review them.")
+    Section(scroll, "When a journal entry window opens", function(group)
+        AddNote(group, "After a dungeon, or when someone leaves your group, a journal entry window opens for anyone you were grouped with for at least this long. Shorter than this, you only get a recap line in chat, and you can still right-click their name to write an entry.")
         AddSlider(group, "Minimum time grouped (minutes)", 1, 60, 1,
             function() return settings.gateMinutes or 10 end,
             function(v) settings.gateMinutes = v end)
@@ -337,7 +337,7 @@ local function BuildSessions(scroll)
     end)
 
     Section(scroll, "Clean Up", function(group)
-        AddNote(group, "The Clean Up button in /pr offers to delete sessions older than this, for players you never reviewed. It always asks first, and reviewed players' sessions are never included.")
+        AddNote(group, "The Clean Up button in /aj offers to delete sessions older than this, for players you never wrote an entry for. It always asks first, and sessions for players with entries are never included.")
         AddSlider(group, "Sessions older than (days)", 7, 180, 1,
             function() return retention.purgeDays end,
             function(v) retention.purgeDays = v end)
@@ -507,7 +507,7 @@ function Options:ResetAll()
 end
 
 StaticPopupDialogs["PLAYERREVIEW_RESET_SETTINGS"] = {
-    text = "Reset every Player Reviews setting to its default?\n\nYour reviews and player data are not affected.",
+    text = "Reset every Allies Journal setting to its default?\n\nYour entries and player data are not affected.",
     button1 = YES,
     button2 = NO,
     OnAccept = function() addon:GetModule("Options"):ResetAll() end,
@@ -521,7 +521,7 @@ function Options:Show()
     if not self.frame then
         local frame = AceGUI:Create("Window")
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
-        frame:SetTitle("Player Reviews - Options")
+        frame:SetTitle("Allies Journal - Options")
         frame:SetLayout("Fill")
         frame:SetWidth(560)
         frame:SetHeight(640)

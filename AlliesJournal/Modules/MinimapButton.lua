@@ -6,7 +6,7 @@ local MinimapButton = addon:NewModule("MinimapButton")
 -- displays. Its position and hidden flag live in settings.minimap
 -- (`minimapPos` is its angle in degrees; `angle` is what an older
 -- hand-made button saved and is carried over once).
-local NAME = "PlayerReviews"
+local NAME = "AlliesJournal"
 local ICON = "Interface\\COMMON\\FavoritesIcon"
 
 function MinimapButton:OnEnable()
@@ -19,7 +19,7 @@ function MinimapButton:OnEnable()
 
     local launcher = LDB:NewDataObject(NAME, {
         type = "launcher",
-        text = "Player Reviews",
+        text = "Allies Journal",
         icon = ICON,
         OnClick = function(_, mouseButton)
             if mouseButton == "RightButton" then
@@ -29,8 +29,8 @@ function MinimapButton:OnEnable()
             end
         end,
         OnTooltipShow = function(tooltip)
-            tooltip:AddLine("Player Reviews")
-            tooltip:AddLine("Left-click: open reviews", 1, 1, 1)
+            tooltip:AddLine("Allies Journal")
+            tooltip:AddLine("Left-click: open entries", 1, 1, 1)
             tooltip:AddLine("Right-click: options", 1, 1, 1)
             tooltip:AddLine("Drag: move this button", 0.6, 0.6, 0.6)
         end,

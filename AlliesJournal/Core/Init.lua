@@ -228,11 +228,15 @@ function PlayerReview:OnInitialize()
         -- codes aside) was never edited, so it picks up the new default
         -- (role icon + date + place); an edited one is left alone.
         local function Plain(s) return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
-        if Plain(t.worldTemplate) == Plain(PlayerReview.OLD_WORLD_TOOLTIP_TEMPLATE) then
-            t.worldTemplate = PlayerReview.DEFAULT_WORLD_TOOLTIP_TEMPLATE
+        for _, old in ipairs({ PlayerReview.OLD_WORLD_TOOLTIP_TEMPLATE, PlayerReview.OLD_WORLD_TOOLTIP_TEMPLATE_2 }) do
+            if Plain(t.worldTemplate) == Plain(old) then
+                t.worldTemplate = PlayerReview.DEFAULT_WORLD_TOOLTIP_TEMPLATE
+            end
         end
-        if Plain(t.lfgTemplate) == Plain(PlayerReview.OLD_LFG_TOOLTIP_TEMPLATE) then
-            t.lfgTemplate = PlayerReview.DEFAULT_LFG_TOOLTIP_TEMPLATE
+        for _, old in ipairs({ PlayerReview.OLD_LFG_TOOLTIP_TEMPLATE, PlayerReview.OLD_LFG_TOOLTIP_TEMPLATE_2 }) do
+            if Plain(t.lfgTemplate) == Plain(old) then
+                t.lfgTemplate = PlayerReview.DEFAULT_LFG_TOOLTIP_TEMPLATE
+            end
         end
         -- superseded by the two fields above
         t.template = nil
@@ -260,9 +264,11 @@ function PlayerReview:OnInitialize()
     end
 
     self.db = { global = g }
+    self:RegisterChatCommand("aj", "SlashCommand")
+    self:RegisterChatCommand("alliesjournal", "SlashCommand")
+    self:RegisterChatCommand("journal", "SlashCommand")
+    -- The old /pr, so nothing breaks for anyone used to it (undocumented).
     self:RegisterChatCommand("pr", "SlashCommand")
-    self:RegisterChatCommand("playerreview", "SlashCommand")
-    self:RegisterChatCommand("playerreviews", "SlashCommand")
 
     local playerCount, reviewCount, sessionCount = 0, 0, 0
     for _ in pairs(self.db.global.players) do playerCount = playerCount + 1 end
@@ -270,7 +276,7 @@ function PlayerReview:OnInitialize()
     for _ in pairs(self.db.global.sessions) do sessionCount = sessionCount + 1 end
 
     self:Print(string.format(
-        "Loaded %d player(s), %d review(s), %d session(s) from SavedVariables.", playerCount, reviewCount, sessionCount))
+        "Loaded %d player(s), %d entries, %d session(s) from SavedVariables.", playerCount, reviewCount, sessionCount))
 
     self:RegisterEvent("WHO_LIST_UPDATE", "OnWhoListUpdate")
     -- Recent Allies events: pcall'd since registering an event this
@@ -282,7 +288,7 @@ function PlayerReview:OnInitialize()
 end
 
 function PlayerReview:OnEnable()
-    self:Print("loaded. Type /pr to browse reviews, or /pr help for all commands.")
+    self:Print("loaded. Type /aj to open your journal, or /aj help for all commands.")
 end
 
 -- Debug dumps and fake-data generators: kept, but only usable with
@@ -319,14 +325,14 @@ function PlayerReview:SlashCommand(input)
     cmd = cmd:lower()
 
     if DEV_COMMANDS[cmd] and not self.db.global.settings.developerTools then
-        self:Print("Unknown command. /pr help lists what's available.")
+        self:Print("Unknown command. /aj help lists what's available.")
         return
     end
 
     if cmd == "dev" then
         local settings = self.db.global.settings
         settings.developerTools = not settings.developerTools
-        self:Print("Developer tools " .. (settings.developerTools and "ON - /pr help lists the extra commands." or "off."))
+        self:Print("Developer tools " .. (settings.developerTools and "ON - /aj help lists the extra commands." or "off."))
     elseif cmd == "" or cmd == "browse" then
         self:GetModule("Browser"):Toggle()
     elseif cmd == "test" then
@@ -350,7 +356,7 @@ function PlayerReview:SlashCommand(input)
     elseif cmd == "namedebug" then
         local tooltip = self:GetModule("Tooltip")
         tooltip.nameDebug = not tooltip.nameDebug
-        self:Print("Name recolor debug " .. (tooltip.nameDebug and "ON - look at a reviewed player's nameplate/frame and check chat." or "off."))
+        self:Print("Name recolor debug " .. (tooltip.nameDebug and "ON - look at a journaled player's nameplate/frame and check chat." or "off."))
     elseif cmd == "inspect" then
         self:GetModule("Tooltip"):InspectNameplate(rest)
     elseif cmd == "findname" then
@@ -378,15 +384,15 @@ function PlayerReview:SlashCommand(input)
     elseif cmd == "lfgoffset" then
         local tooltipSettings = self.db.global.settings.tooltip
         if rest == "" then
-            self:Print(string.format("LFG tooltip offset is x=%d, y=%d. (Also editable via /pr options.)", tooltipSettings.lfgOffsetX, tooltipSettings.lfgOffsetY))
+            self:Print(string.format("LFG tooltip offset is x=%d, y=%d. (Also editable via /aj options.)", tooltipSettings.lfgOffsetX, tooltipSettings.lfgOffsetY))
         else
             local x, y = rest:match("^(%-?%d+)%s+(%-?%d+)$")
             x, y = tonumber(x), tonumber(y)
             if not x or not y then
-                self:Print("Usage: /pr lfgoffset <x> <y>")
+                self:Print("Usage: /aj lfgoffset <x> <y>")
             else
                 tooltipSettings.lfgOffsetX, tooltipSettings.lfgOffsetY = x, y
-                self:Print(string.format("LFG tooltip offset set to x=%d, y=%d. Hover a reviewed row to see it.", x, y))
+                self:Print(string.format("LFG tooltip offset set to x=%d, y=%d. Hover a journal row to see it.", x, y))
             end
         end
     elseif cmd == "options" or cmd == "config" then
@@ -405,64 +411,64 @@ function PlayerReview:SlashCommand(input)
         local mm = self.db.global.settings.minimap
         mm.hide = not mm.hide
         self:GetModule("MinimapButton"):Refresh()
-        self:Print("Minimap button " .. (mm.hide and "hidden (/pr minimap shows it again)." or "shown."))
+        self:Print("Minimap button " .. (mm.hide and "hidden (/aj minimap shows it again)." or "shown."))
     elseif cmd == "recentallydebug" then
         self.recentAllyDebug = not self.recentAllyDebug
-        self:Print("Recent Allies sync debug " .. (self.recentAllyDebug and "ON - save/edit a review and check chat for what SetRecentAllyPinned/SetRecentAllyNote actually returned." or "off."))
+        self:Print("Recent Allies sync debug " .. (self.recentAllyDebug and "ON - save/edit an entry and check chat for what SetRecentAllyPinned/SetRecentAllyNote actually returned." or "off."))
     elseif cmd == "allyinfo" then
         self:DumpRecentAllyDetails(rest)
     elseif cmd == "badgetest" then
         self:GetModule("Tooltip"):ToggleBadgeTest()
-    elseif cmd == "pinreviewed" then
+    elseif cmd == "pinjournal" then
         self:PinReviewedAllies()
     elseif cmd == "resyncrecentallies" then
         self:ResyncAllRecentAllies()
     else
         self:Print("Usage:")
-        self:Print("  /pr - open the review browser")
-        self:Print("  /pr queue [unit] - force-queue a real review for a unit (default: target), skipping the time gate")
-        self:Print("  /pr queuename <Name> or <Name-Realm> - queue a review by name alone, for players you can't target (e.g. an LFG listing)")
-        self:Print("  /pr gate [minutes] - show or set the grouped-time gate (set to 0 to test real triggers instantly)")
-        self:Print("  /pr lfgoffset [x y] - show or set the Group Finder tooltip's x/y offset live")
-        self:Print("  /pr options (or /pr config) - open the settings window")
-        self:Print("  /pr stats - print the per-category storage size breakdown (chat/meter/sessions/reviews) without opening the browser")
-        self:Print("  /pr minimap - show or hide the minimap button")
-        self:Print("  /pr pinreviewed - pin every reviewed player who isn't pinned in Recent Allies yet (skips anyone with a bad review unless that's turned on in /pr options)")
-        self:Print("  /pr resyncrecentallies - re-applies the pin/note to every reviewed player's C_RecentAllies entry using their latest review, for reviews saved before the name-based GUID fallback existed")
+        self:Print("  /aj - open your journal")
+        self:Print("  /aj queue [unit] - force-queue a real entry for a unit (default: target), skipping the time gate")
+        self:Print("  /aj queuename <Name> or <Name-Realm> - queue an entry by name alone, for players you can't target (e.g. an LFG listing)")
+        self:Print("  /aj gate [minutes] - show or set the grouped-time gate (set to 0 to test real triggers instantly)")
+        self:Print("  /aj lfgoffset [x y] - show or set the Group Finder tooltip's x/y offset live")
+        self:Print("  /aj options (or /aj config) - open the settings window")
+        self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/entries) without opening the browser")
+        self:Print("  /aj minimap - show or hide the minimap button")
+        self:Print("  /aj pinjournal - pin every player with an entry who isn't pinned in Recent Allies yet (skips anyone with a bad rating unless that's turned on in /aj options)")
+        self:Print("  /aj resyncrecentallies - re-applies the pin/note to every journaled player's C_RecentAllies entry using their latest entry, for entries saved before the name-based GUID fallback existed")
         if self.db.global.settings.developerTools then
-            self:Print("Developer tools (/pr dev turns these off):")
-            self:Print("  /pr export - show all review data as copyable text, to back them up")
-            self:Print("  /pr import - paste back a previous /pr export; merges in, never overwrites existing data")
-            self:Print("  /pr test - queue a fake review prompt, no group needed (tests the UI only)")
-            self:Print("  /pr testgroup - like /pr test but with 3 fake fights and 4 fake group members, to test the fight checklist and DPS bar chart without needing anyone else")
-            self:Print("  /pr capturesave [unit] - save real captured fight data for a unit (default: target) as copyable text, to replay later via /pr capturereplay")
-            self:Print("  /pr capturereplay - paste back a previous /pr capturesave and open a review prompt using that exact real data, for repeated UI testing")
+            self:Print("Developer tools (/aj dev turns these off):")
+            self:Print("  /aj export - show all entry data as copyable text, to back them up")
+            self:Print("  /aj import - paste back a previous /aj export; merges in, never overwrites existing data")
+            self:Print("  /aj test - queue a fake entry window, no group needed (tests the UI only)")
+            self:Print("  /aj testgroup - like /aj test but with 3 fake fights and 4 fake group members, to test the fight checklist and DPS bar chart without needing anyone else")
+            self:Print("  /aj capturesave [unit] - save real captured fight data for a unit (default: target) as copyable text, to replay later via /aj capturereplay")
+            self:Print("  /aj capturereplay - paste back a previous /aj capturesave and open an entry window using that exact real data, for repeated UI testing")
             self:Print("  /pr menudebug - toggle printing every right-click menu tag seen, to debug the context menu button")
             self:Print("  /pr namedebug - toggle printing what the name-recolor hook sees, to debug the floating name color")
             self:Print("  /pr lfgdebug - toggle printing Group Finder scan results (rows found, matches, badges shown)")
-            self:Print("  /pr lfgapi - dump what C_LFGList.GetSearchResults/GetSearchResultInfo/GetSearchResultMembers return, with a Group Finder search active")
-            self:Print("  /pr lfgapi2 - deeper C_LFGList probe using the real function names (GetSearchResultPlayerInfo, GetSearchResultMemberCounts, etc.) into a copyable window")
-            self:Print("  /pr lfginspect [row#] - dump every FontString and readable field found on a visible Group Finder row (default row 1), to check for group-member data beyond the poster's name")
-            self:Print("  /pr dump <GlobalTableName> - dump every key + value type from any global table (e.g. /pr dump C_LFGList) into a copyable window, for exploring unfamiliar APIs on this client")
+            self:Print("  /aj lfgapi - dump what C_LFGList.GetSearchResults/GetSearchResultInfo/GetSearchResultMembers return, with a Group Finder search active")
+            self:Print("  /aj lfgapi2 - deeper C_LFGList probe using the real function names (GetSearchResultPlayerInfo, GetSearchResultMemberCounts, etc.) into a copyable window")
+            self:Print("  /aj lfginspect [row#] - dump every FontString and readable field found on a visible Group Finder row (default row 1), to check for group-member data beyond the poster's name")
+            self:Print("  /aj dump <GlobalTableName> - dump every key + value type from any global table (e.g. /aj dump C_LFGList) into a copyable window, for exploring unfamiliar APIs on this client")
             self:Print("  /pr capturedebug - toggle live logging of what C_DamageMeter returns during combat, to debug missing DPS/HPS")
-            self:Print("  /pr capturestate - dump currently-held capture state (snapshots + combat seconds) into a copyable window")
-            self:Print("  /pr inspect [unit] - dump a unit's nameplate frame structure, if it has one (default: target)")
-            self:Print("  /pr findname [unit] - scan all frames for the floating name text itself, wherever it lives (default: target)")
-            self:Print("  /pr findtext <text> - like findname, but for text not tied to a unit (e.g. a Group Finder listing name)")
-            self:Print("  /pr inspectframe <GlobalFrameName> - dump a named frame's regions, e.g. TargetFrame, CompactPartyFrameMember1")
-            self:Print("  /pr recentallies - dump C_RecentAllies system status + every cached entry, and cross-check it against your reviewed players, into a copyable window")
+            self:Print("  /aj capturestate - dump currently-held capture state (snapshots + combat seconds) into a copyable window")
+            self:Print("  /aj inspect [unit] - dump a unit's nameplate frame structure, if it has one (default: target)")
+            self:Print("  /aj findname [unit] - scan all frames for the floating name text itself, wherever it lives (default: target)")
+            self:Print("  /aj findtext <text> - like findname, but for text not tied to a unit (e.g. a Group Finder listing name)")
+            self:Print("  /aj inspectframe <GlobalFrameName> - dump a named frame's regions, e.g. TargetFrame, CompactPartyFrameMember1")
+            self:Print("  /aj recentallies - dump C_RecentAllies system status + every cached entry, and cross-check it against your players with entries, into a copyable window")
             self:Print("  /pr recentallydebug - toggle live logging of what SetRecentAllyPinned/SetRecentAllyNote actually return when a review is saved, to debug a pin/note that isn't sticking")
-            self:Print("  /pr allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) into a copyable window; defaults to the selected player or your target")
-            self:Print("  /pr badgetest - toggle a fake badge on every party/raid frame found, to check placement without a group")
+            self:Print("  /aj allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) into a copyable window; defaults to the selected player or your target")
+            self:Print("  /aj badgetest - toggle a fake badge on every party/raid frame found, to check placement without a group")
         end
     end
 end
 
 function PlayerReview:PrintStorageStats()
     local s = self:GetStorageStats()
-    self:Print(string.format("%d player(s), %d session(s), %d review(s).",
+    self:Print(string.format("%d player(s), %d session(s), %d entries.",
         s.playerCount, s.sessionCount, s.reviewCount))
-    self:Print(string.format("Chat %s | Sessions %s | Reviews %s | Players %s | Total %s",
+    self:Print(string.format("Chat %s | Sessions %s | Entries %s | Players %s | Total %s",
         self:FormatBytes(s.chatBytes), self:FormatBytes(s.sessionsBytes),
         self:FormatBytes(s.reviewsBytes), self:FormatBytes(s.playersBytes), self:FormatBytes(s.totalBytes)))
 end
@@ -498,7 +504,7 @@ function PlayerReview:ResyncAllRecentAllies(quiet, onlyUnpinned)
         end
     end
     if not quiet then
-        self:Print(string.format("Resynced %d of %d reviewed player(s) to Recent Allies (the rest have no matching Recent Allies entry right now).", synced, total))
+        self:Print(string.format("Resynced %d of %d player(s) with entries to Recent Allies (the rest have no matching Recent Allies entry right now).", synced, total))
     end
 end
 
@@ -523,7 +529,7 @@ function PlayerReview:DumpRecentAllyDetails(query)
         end
     end
     if query == "" then
-        self:Print("Usage: /pr allyinfo <name> (or select a player in /pr, or target someone)")
+        self:Print("Usage: /aj allyinfo <name> (or select a player in /aj, or target someone)")
         return
     end
 
@@ -605,7 +611,7 @@ function PlayerReview:PinReviewedAllies()
         end
     end
     self:Print(string.format(
-        "Pin reviewed: %d pinned, %d still retrying, %d already pinned, %d skipped (bad review), %d not in Recent Allies.",
+        "Pin journal: %d pinned, %d still retrying, %d already pinned, %d skipped (bad rating), %d not in Recent Allies.",
         pinned, queued, alreadyPinned, skippedBad, notKnown))
 end
 
@@ -722,7 +728,7 @@ function PlayerReview:ReplayCapturedFights(text)
     local loader = loadstring or load
     local chunk, err = loader(text)
     if not chunk then
-        self:Print("Couldn't parse (" .. tostring(err) .. ") - make sure the full /pr capturesave text was pasted.")
+        self:Print("Couldn't parse (" .. tostring(err) .. ") - make sure the full /aj capturesave text was pasted.")
         return
     end
     if setfenv then setfenv(chunk, {}) end  -- pasted data only, no globals
@@ -785,7 +791,7 @@ end
 function PlayerReview:QueueNameForReview(nameRealm)
     nameRealm = strtrim(nameRealm or "")
     if nameRealm == "" then
-        self:Print("Usage: /pr queuename <Name> or <Name-Realm>")
+        self:Print("Usage: /aj queuename <Name> or <Name-Realm>")
         return
     end
 
@@ -881,7 +887,7 @@ end
 function PlayerReview:DumpGlobalTable(name)
     name = strtrim(name or "")
     if name == "" then
-        self:Print("Usage: /pr dump <GlobalTableName> (e.g. /pr dump C_LFGList)")
+        self:Print("Usage: /aj dump <GlobalTableName> (e.g. /aj dump C_LFGList)")
         return
     end
 
@@ -951,7 +957,7 @@ function PlayerReview:DumpRecentAllies()
     end
 
     table.insert(lines, "")
-    table.insert(lines, "-- Cross-check against reviewed players (short-name match, same as Browser.lua) --")
+    table.insert(lines, "-- Cross-check against players with entries (short-name match, same as Browser.lua) --")
     for _, record in ipairs(self:GetAllPlayers()) do
         local shortName = self:GetShortName(record.nameRealm)
         local found = false
@@ -979,7 +985,7 @@ function PlayerReview:HandleGateCommand(rest)
 
     local minutes = tonumber(rest)
     if not minutes or minutes < 0 then
-        self:Print("Usage: /pr gate <minutes>")
+        self:Print("Usage: /aj gate <minutes>")
         return
     end
 
