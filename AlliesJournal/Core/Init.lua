@@ -156,6 +156,10 @@ function AlliesJournal:OnInitialize()
     -- unless this is turned on (every pin path follows it).
     g.settings.recentAllies = g.settings.recentAllies or {}
     if g.settings.recentAllies.pinBad == nil then g.settings.recentAllies.pinBad = false end
+    -- One "How was it?" question instead of Social + Performance when writing
+    -- a note. Notes remember the mode they were written in, so flipping this
+    -- never changes an existing note.
+    if g.settings.simpleNotes == nil then g.settings.simpleNotes = false end
     g.settings.browserList.cardFade = g.settings.browserList.cardFade or 0.25
     g.settings.browserList.offlineDim = g.settings.browserList.offlineDim or 0.55
     -- Visual settings, editable live via /pr options. Every field uses its
@@ -228,12 +232,12 @@ function AlliesJournal:OnInitialize()
         -- codes aside) was never edited, so it picks up the new default
         -- (role icon + date + place); an edited one is left alone.
         local function Plain(s) return (s:gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", "")) end
-        for _, old in ipairs({ AlliesJournal.OLD_WORLD_TOOLTIP_TEMPLATE, AlliesJournal.OLD_WORLD_TOOLTIP_TEMPLATE_2 }) do
+        for _, old in ipairs({ AlliesJournal.OLD_WORLD_TOOLTIP_TEMPLATE, AlliesJournal.OLD_WORLD_TOOLTIP_TEMPLATE_2, AlliesJournal.OLD_WORLD_TOOLTIP_TEMPLATE_3 }) do
             if Plain(t.worldTemplate) == Plain(old) then
                 t.worldTemplate = AlliesJournal.DEFAULT_WORLD_TOOLTIP_TEMPLATE
             end
         end
-        for _, old in ipairs({ AlliesJournal.OLD_LFG_TOOLTIP_TEMPLATE, AlliesJournal.OLD_LFG_TOOLTIP_TEMPLATE_2 }) do
+        for _, old in ipairs({ AlliesJournal.OLD_LFG_TOOLTIP_TEMPLATE, AlliesJournal.OLD_LFG_TOOLTIP_TEMPLATE_2, AlliesJournal.OLD_LFG_TOOLTIP_TEMPLATE_3 }) do
             if Plain(t.lfgTemplate) == Plain(old) then
                 t.lfgTemplate = AlliesJournal.DEFAULT_LFG_TOOLTIP_TEMPLATE
             end

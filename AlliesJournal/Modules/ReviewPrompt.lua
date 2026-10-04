@@ -44,6 +44,7 @@ function ReviewPrompt:ShowNext()
         socialNote = "",
         performanceNote = "",
         role = data.role,  -- pre-selected when auto-filled, editable regardless
+        mode = addon.db.global.settings.simpleNotes and "simple" or "detailed",
         selectedFights = {},  -- fightIndex -> true, all checked by default
     }
     for i in ipairs(data.fights or {}) do
@@ -80,13 +81,24 @@ end
 function ReviewPrompt:Save()
     local form = self.form
 
-    if form.social ~= "average" and strtrim(form.socialNote or "") == "" then
-        self:ShowValidationError(L["A note is required when Social is not Average."])
-        return
-    end
-    if form.performance ~= "average" and strtrim(form.performanceNote or "") == "" then
-        self:ShowValidationError(L["A note is required when Performance is not Average."])
-        return
+    if form.mode == "simple" then
+        if form.social ~= "average" and strtrim(form.socialNote or "") == "" then
+            self:ShowValidationError("A note is required unless it was Fine.")
+            return
+        end
+        -- Stored like a detailed note (everything reads both fields), with
+        -- the one answer in both.
+        form.performance = form.social
+        form.performanceNote = ""
+    else
+        if form.social ~= "average" and strtrim(form.socialNote or "") == "" then
+            self:ShowValidationError(L["A note is required when Social is not Average."])
+            return
+        end
+        if form.performance ~= "average" and strtrim(form.performanceNote or "") == "" then
+            self:ShowValidationError(L["A note is required when Performance is not Average."])
+            return
+        end
     end
 
     local data = self.current
@@ -100,6 +112,7 @@ function ReviewPrompt:Save()
             socialNote = form.socialNote or "",
             performance = form.performance,
             performanceNote = form.performanceNote or "",
+            mode = form.mode,
         })
         self.editingReviewID = nil
         self.active = false
@@ -127,6 +140,7 @@ function ReviewPrompt:Save()
         socialNote = form.socialNote or "",
         performance = form.performance,
         performanceNote = form.performanceNote or "",
+        mode = form.mode,
         dps = aggregate.dps,
         hps = aggregate.hps,
         groupMaxDps = aggregate.groupMaxDps,
@@ -194,6 +208,9 @@ function ReviewPrompt:EditReview(nameRealm, reviewId)
         socialNote = review.socialNote or "",
         performanceNote = review.performanceNote or "",
         role = review.role,
+        -- An edit stays in the mode the note was written in, whatever the
+        -- option is now (notes from before simple mode have no mode).
+        mode = review.mode or "detailed",
     }
     self:BuildFrame()
 
@@ -215,6 +232,12 @@ local RATING_COLORS = { good = "|cff40ff40", average = "|cffffd100", bad = "|cff
 -- a required note (Good/Bad) can be satisfied without typing, and an
 -- optional Average note takes one click too.
 local TAGS = {
+    -- Simple notes: one merged set for the single question.
+    simple = {
+        good = { "Friendly", "Great communicator", "Helpful", "Good at their role", "Fun to play with" },
+        average = { "Quiet", "Polite", "Did their job", "Nothing notable" },
+        bad = { "Rude", "Toxic chat", "Left early", "Ignored the group", "Died a lot" },
+    },
     social = {
         good = { "Friendly", "Great communicator", "Patient", "Helpful" },
         average = { "Quiet", "Polite", "Didn't say much", "Nothing notable" },
@@ -330,8 +353,12 @@ function ReviewPrompt:BuildFrame()
     end)
     frame:AddChild(roleDropdown)
 
-    self:AddRatingSection(frame, "social", L["Social"])
-    self:AddRatingSection(frame, "performance", L["Performance"])
+    if self.form.mode == "simple" then
+        self:AddRatingSection(frame, "social", "How was it?")
+    else
+        self:AddRatingSection(frame, "social", L["Social"])
+        self:AddRatingSection(frame, "performance", L["Performance"])
+    end
 
     -- Plain divider line between the rating form above and the fight
     -- data/chat below - AceGUI's own "Heading" widget draws a full-width
@@ -420,7 +447,9 @@ function ReviewPrompt:RefreshRequirements()
     local form = self.form
     local missing = {}
 
-    for _, entry in ipairs({ { "social", "Social" }, { "performance", "Performance" } }) do
+    local simple = form.mode == "simple"
+    local axes = simple and { { "social", "Your" } } or { { "social", "Social" }, { "performance", "Performance" } }
+    for _, entry in ipairs(axes) do
         local key, name = entry[1], entry[2]
         local required = form[key] ~= "average"
         local noteText = form[key .. "Note"] or ""
@@ -429,9 +458,9 @@ function ReviewPrompt:RefreshRequirements()
 
         if note then
             if required and empty then
-                note:SetLabel("|cffff4040" .. name .. " note - required for " .. addon:RatingWord(key, form[key]) .. "|r")
+                note:SetLabel("|cffff4040" .. name .. " note - required for " .. addon:RatingWord(simple and "simple" or key, form[key]) .. "|r")
             elseif required then
-                note:SetLabel(name .. " note (required for " .. addon:RatingWord(key, form[key]) .. ")" .. CounterText(noteText))
+                note:SetLabel(name .. " note (required for " .. addon:RatingWord(simple and "simple" or key, form[key]) .. ")" .. CounterText(noteText))
             else
                 note:SetLabel("|cff999999" .. name .. " note (optional)|r" .. CounterText(noteText))
             end
@@ -447,16 +476,22 @@ function ReviewPrompt:RefreshRequirements()
 
     if self.noteHint then
         if #missing > 0 then
-            self.noteHint:SetText("|cffff4040Add a note for " .. table.concat(missing, " and ") .. " to save.|r")
+            self.noteHint:SetText(simple and "|cffff4040Add a note to save.|r"
+                or ("|cffff4040Add a note for " .. table.concat(missing, " and ") .. " to save.|r"))
         else
             self.noteHint:SetText("|cff40ff40Ready to save.|r")
         end
     end
     if self.saveBtn then
         self.saveBtn:SetDisabled(#missing > 0)
-        local untouched = form.social == "average" and form.performance == "average"
-            and strtrim(form.socialNote or "") == "" and strtrim(form.performanceNote or "") == ""
-        self.saveBtn:SetText(untouched and "Save as Fine / Solid" or L["Save"])
+        local untouched
+        if simple then
+            untouched = form.social == "average" and strtrim(form.socialNote or "") == ""
+        else
+            untouched = form.social == "average" and form.performance == "average"
+                and strtrim(form.socialNote or "") == "" and strtrim(form.performanceNote or "") == ""
+        end
+        self.saveBtn:SetText(untouched and (simple and "Save as Fine" or "Save as Fine / Solid") or L["Save"])
     end
 end
 
@@ -482,7 +517,7 @@ function ReviewPrompt:FillChips(key)
     local row = self.chipRows[key]
     row:ReleaseChildren()
 
-    local tags = TAGS[key][self.form[key]]
+    local tags = TAGS[self.form.mode == "simple" and "simple" or key][self.form[key]]
     if tags then
         for _, tag in ipairs(tags) do
             local btn = AceGUI:Create("Button")
@@ -528,7 +563,7 @@ function ReviewPrompt:AddRatingSection(frame, key, label)
     self.ratingBoxes[key] = {}
     for _, value in ipairs(RATING_ORDER) do
         local cb = AceGUI:Create("CheckBox")
-        cb:SetLabel(RATING_COLORS[value] .. addon:RatingWord(key, value) .. "|r")
+        cb:SetLabel(RATING_COLORS[value] .. addon:RatingWord(self.form.mode == "simple" and "simple" or key, value) .. "|r")
         cb:SetType("radio")
         cb:SetWidth(150)
         cb:SetValue(self.form[key] == value)
@@ -562,7 +597,7 @@ function ReviewPrompt:AddRatingSection(frame, key, label)
     note:SetCallback("OnEnterPressed", function(widget, event, text)
         self.form[noteKey] = text
         self:RefreshRequirements()
-        if key == "social" then
+        if key == "social" and self.form.mode ~= "simple" then
             if self.noteBoxes.performance then self.noteBoxes.performance:SetFocus() end
         elseif self.saveBtn and not self.saveBtn.disabled then
             self:Save()

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0-beta
+
+- New option in `/aj options` (off by default): ask one question, "How was it?" (Great / Fine / Not for me), instead of Social and Performance, with one note box and one set of quick tags. Each note remembers how it was written, so switching never changes a note you already have, and editing a note opens it the way it was saved.
+
 ## 0.2.0-beta
 
 - Renamed from Player Reviews to **Allies Journal**: it's a private journal of the people you group with, not a score. The addon folder is now `AlliesJournal`, the commands are `/aj`, `/alliesjournal` and `/journal` (`/pr` still works), and the wording in the window, tooltips and options talks about notes instead of reviews.

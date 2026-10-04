@@ -916,7 +916,11 @@ function Browser:RefreshList()
             end
             local summary
             if latest then
-                summary = string.format('Social: %s   Perf: %s', RatingText("social", latest.social), RatingText("performance", latest.performance))
+                if latest.mode == 'simple' then
+                    summary = 'How was it: ' .. RatingText('simple', latest.social)
+                else
+                    summary = string.format('Social: %s   Perf: %s', RatingText("social", latest.social), RatingText("performance", latest.performance))
+                end
             else
                 summary = string.format('|cff888888No reviews yet - %d session(s)|r', #record.sessions)
             end
@@ -1110,9 +1114,13 @@ function Browser:ShowHistory(nameRealm)
         local roleText = review.role and (addon:RoleIconText(review.role, 14) .. review.role:upper()) or ""
         local lines = {
             string.format("|cffffd100%s|r  %s%s  %s", review.encounter or "Unknown", GRAY, dateStr, roleText) .. "|r",
-            "Social: " .. RatingText("social", review.social) .. NoteText(review.socialNote),
-            "Perf: " .. RatingText("performance", review.performance) .. NoteText(review.performanceNote),
         }
+        if review.mode == "simple" then
+            table.insert(lines, "How was it: " .. RatingText("simple", review.social) .. NoteText(review.socialNote))
+        else
+            table.insert(lines, "Social: " .. RatingText("social", review.social) .. NoteText(review.socialNote))
+            table.insert(lines, "Perf: " .. RatingText("performance", review.performance) .. NoteText(review.performanceNote))
+        end
         local dmg = StatLine("Damage", "DPS", review.dps, review.groupMaxDps, review.groupTotalDps)
         local heal = StatLine("Healing", "HPS", review.hps, review.groupMaxHps, review.groupTotalHps)
         if dmg then table.insert(lines, dmg) end

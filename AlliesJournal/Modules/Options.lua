@@ -13,7 +13,8 @@ local TEMPLATE_HELP = table.concat({
     "Each line below becomes one tooltip line. Color codes work directly - e.g. ||cffff0000red text||r for red (use || instead of | so it isn't rendered here).",
     " ",
     "Placeholders (used as {name}):",
-    "  {social} / {performance} - how it went, as colored text (Great to play with / Fine / Not for me, and Strong / Solid / Struggled)",
+    "  {socialLine} / {performanceLine} - whole lines for how it went (\"Social: Fine\", \"Perf: Strong\", or just \"How was it: Great\" for a simple note). A line containing only one of these is dropped when it is empty.",
+    "  {social} / {performance} - just the colored word for each",
     "  {socialNote} / {performanceNote} - the text of the notes on it. A line containing ONLY one of these is dropped entirely when that note is empty.",
     "  {count} - how many notes this player has",
     "  {author} - who wrote the most recent note",
@@ -225,6 +226,13 @@ local function BuildGeneral(scroll)
                 addon:GetModule("LFGAnnotate"):ScanBrowseResults()
             end)
         AddNote(group, "Shown as \"Wailing Caverns - The Barrens\" on every listing, with or without a note.")
+    end)
+
+    Section(scroll, "Writing a note", function(group)
+        AddCheckbox(group, "Ask one question (\"How was it?\") instead of Social and Performance",
+            function() return settings.simpleNotes end,
+            function(v) settings.simpleNotes = v and true or false end)
+        AddNote(group, "Great / Fine / Not for me, with one note box and one set of quick tags. It only changes the window you get for a new note: notes you already wrote keep showing, and keep opening for editing, the way they were saved.")
     end)
 
     Section(scroll, "Recent Allies", function(group)
@@ -490,6 +498,7 @@ function Options:ResetAll()
     settings.departureSummary = { enabled = true }
     settings.browserList = { rowPadding = 4, cardFade = 0.25, offlineDim = 0.55 }
     settings.recentAllies = { pinBad = false }
+    settings.simpleNotes = false
     settings.browserWindow = { width = 550, height = 700 }
     addon:GetModule("Browser"):ApplyWindowSize()
     settings.browserColors = {}

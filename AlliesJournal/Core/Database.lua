@@ -45,13 +45,23 @@ addon.OLD_LFG_TOOLTIP_TEMPLATE_2 = table.concat({
     "Social: {social}", "{socialNote}", "Perf: {performance}", "{performanceNote}",
 }, "\n")
 
+-- Defaults from 0.2.0 (before simple notes), for the same upgrade check.
+addon.OLD_WORLD_TOOLTIP_TEMPLATE_3 = table.concat({
+    " ", "{roleIcon}|cffffd100Journal ({count})|r  |cff808080{date}|r", "|cff808080{encounter}|r",
+    "Social: {social}", "{socialNote}", "Perf: {performance}", "{performanceNote}",
+}, "\n")
+addon.OLD_LFG_TOOLTIP_TEMPLATE_3 = table.concat({
+    "{roleIcon}|cffffd100Journal ({count})|r  |cff808080{date}|r", "{memberNote}",
+    "Social: {social}", "{socialNote}", "Perf: {performance}", "{performanceNote}",
+}, "\n")
+
 addon.DEFAULT_WORLD_TOOLTIP_TEMPLATE = table.concat({
     " ",
     "{roleIcon}|cffffd100Journal ({count})|r  |cff808080{date}|r",
     "|cff808080{encounter}|r",
-    "Social: {social}",
+    "{socialLine}",
     "{socialNote}",
-    "Perf: {performance}",
+    "{performanceLine}",
     "{performanceNote}",
 }, "\n")
 
@@ -61,9 +71,9 @@ addon.DEFAULT_LFG_TOOLTIP_TEMPLATE = table.concat({
     -- shows "Group member: X" when the reviewed match is someone ELSE
     -- already in the group, since that's not otherwise visible anywhere.
     "{memberNote}",
-    "Social: {social}",
+    "{socialLine}",
     "{socialNote}",
-    "Perf: {performance}",
+    "{performanceLine}",
     "{performanceNote}",
 }, "\n")
 
@@ -165,6 +175,8 @@ function addon:AddReview(nameRealm, reviewData)
         socialNote = reviewData.socialNote or "",
         performance = reviewData.performance,
         performanceNote = reviewData.performanceNote or "",
+        -- "simple" (one question) or nil/"detailed" (Social + Performance).
+        mode = reviewData.mode,
         dps = reviewData.dps,
         hps = reviewData.hps,
         groupMaxDps = reviewData.groupMaxDps,
@@ -201,6 +213,8 @@ end
 addon.RATING_WORDS = {
     social = { good = "Great to play with", average = "Fine", bad = "Not for me" },
     performance = { good = "Strong", average = "Solid", bad = "Struggled" },
+    -- Simple notes ask a single question instead of both.
+    simple = { good = "Great", average = "Fine", bad = "Not for me" },
 }
 
 function addon:RatingWord(axis, value)
@@ -273,7 +287,9 @@ function addon:ApplyRecentAlly(guid, review)
     -- necessarily a compressed teaser, not the full review - the real
     -- review (with both notes, chat, fight data) always stays in our own
     -- SavedVariables record; Browser is still the source of truth.
-    local note = string.format("[AJ] %s, %s", social, performance)
+    local note = (review.mode == "simple")
+        and string.format("[AJ] %s", self:RatingWord("simple", review.social))
+        or string.format("[AJ] %s, %s", social, performance)
     local extra = (review.performanceNote and review.performanceNote ~= "" and review.performanceNote)
         or (review.socialNote and review.socialNote ~= "" and review.socialNote) or nil
     if extra then
@@ -343,7 +359,7 @@ function addon:SyncRecentAlly(guid, review, nameRealm, quiet)
     local name = self:GetShortName(nameRealm) or "player"
     -- Copied: callers pass a live form table that gets replaced later.
     local snapshot = {
-        social = review.social, performance = review.performance,
+        social = review.social, performance = review.performance, mode = review.mode,
         socialNote = review.socialNote, performanceNote = review.performanceNote,
     }
 
@@ -743,8 +759,15 @@ end
 -- leader/poster) without the world tooltip needing to know that concept.
 function addon:GetReviewTooltipVars(review, nameRealm, extra)
     local vars = {
-        social = self:FormatRatingText(review.social, "social"),
-        performance = self:FormatRatingText(review.performance, "performance"),
+        social = self:FormatRatingText(review.social, review.mode == "simple" and "simple" or "social"),
+        performance = review.mode == "simple" and "" or self:FormatRatingText(review.performance, "performance"),
+        -- Whole lines, so a simple note shows one line and a detailed one two
+        -- (an empty line is dropped by the template).
+        socialLine = review.mode == "simple"
+            and ("How was it: " .. self:FormatRatingText(review.social, "simple"))
+            or ("Social: " .. self:FormatRatingText(review.social, "social")),
+        performanceLine = review.mode == "simple" and ""
+            or ("Perf: " .. self:FormatRatingText(review.performance, "performance")),
         socialNote = review.socialNote or "",
         performanceNote = review.performanceNote or "",
         count = tostring(nameRealm and #self:GetReviewsForPlayer(nameRealm) or 1),

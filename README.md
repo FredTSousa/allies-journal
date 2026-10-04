@@ -8,7 +8,7 @@ I used to add players I liked as friends, and ended up with a huge list of names
 
 ## What it does
 
-- **Notes.** When a run ends or someone leaves your group, a small window lets you write a note on them: how they were to play with and how they played (Good, Average, Bad), quick tags, and the fights, DPS chart and chat from your time together.
+- **Notes.** When a run ends or someone leaves your group, a small window lets you write a note on them: how they were to play with and how they played (Good, Average, Bad), quick tags, and the fights, DPS chart and chat from your time together. If two questions feel like too much, there is an option to ask just one ("How was it?").
 - **Recent Allies.** Players with a note are pinned in Blizzard's Recent Allies list with a short note, and the interactions Blizzard recorded (fought together, traded and so on) show in their detail. Players you noted as Bad aren't pinned unless you turn that on.
 - **Session history.** Every run you played together is recorded: when, where, how long, and how it went. Dungeons are tracked one run at a time.
 - **Group Finder.** Listings with someone from your journal get a badge and a tooltip with your note, and each listing shows where its leader currently is.
