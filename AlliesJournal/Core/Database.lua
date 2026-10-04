@@ -194,7 +194,19 @@ function addon:AddReview(nameRealm, reviewData)
     return review
 end
 
-local RECENT_ALLY_RATING_LABELS = { good = "Good", average = "Average", bad = "Bad" }
+-- The words for the three levels of each question. The stored values stay
+-- good / average / bad (colors, filters and pinning all key off them); only
+-- what's shown differs: Social is "how was it to play with them", Performance
+-- is "how did they play".
+addon.RATING_WORDS = {
+    social = { good = "Great to play with", average = "Fine", bad = "Not for me" },
+    performance = { good = "Strong", average = "Solid", bad = "Struggled" },
+}
+
+function addon:RatingWord(axis, value)
+    local words = self.RATING_WORDS[axis]
+    return words and words[value] or tostring(value or "-")
+end
 
 -- Resolves a nameRealm to its real GUID via the C_RecentAllies cache, for
 -- when no live unit was available at review time (/pr queuename, or the
@@ -253,15 +265,15 @@ function addon:ApplyRecentAlly(guid, review)
     end
     if not ok or not canNote then return end
 
-    local social = RECENT_ALLY_RATING_LABELS[review.social] or review.social
-    local performance = RECENT_ALLY_RATING_LABELS[review.performance] or review.performance
+    local social = self:RatingWord("social", review.social)
+    local performance = self:RatingWord("performance", review.performance)
     -- Confirmed in-game: this field is capped at 127 chars, so the tag +
     -- ratings prefix has to stay short to leave any room at all for the
     -- one thing actually worth reading here (the note itself). This is
     -- necessarily a compressed teaser, not the full review - the real
     -- review (with both notes, chat, fight data) always stays in our own
     -- SavedVariables record; Browser is still the source of truth.
-    local note = string.format("[PR] Social: %s, Perf: %s", social, performance)
+    local note = string.format("[AJ] %s, %s", social, performance)
     local extra = (review.performanceNote and review.performanceNote ~= "" and review.performanceNote)
         or (review.socialNote and review.socialNote ~= "" and review.socialNote) or nil
     if extra then
@@ -307,7 +319,7 @@ end
 function addon:SyncRecentAlly(guid, review, nameRealm, quiet)
     if not self:ShouldPinReview(review) then
         if not quiet then
-            self:Print((self:GetShortName(nameRealm) or "Player") .. " is noted as Bad, so they aren't pinned in Recent Allies (change this in /aj options).")
+            self:Print((self:GetShortName(nameRealm) or "Player") .. " is marked 'Not for me' or 'Struggled', so they aren't pinned in Recent Allies (change this in /aj options).")
         end
         return false
     end
@@ -623,7 +635,7 @@ function addon:GetWorstRatingRGB(review)
     return tonumber(hex:sub(1, 2), 16) / 255, tonumber(hex:sub(3, 4), 16) / 255, tonumber(hex:sub(5, 6), 16) / 255
 end
 
--- "Good"/"Average"/"Bad" as colored, capitalized text (|cff...|r wrapped),
+-- One level of a question as colored text (|cff...|r wrapped),
 -- for anywhere a single rating value needs to read as text rather than
 -- become a swatch color - tooltips, chat lines.
 local RATING_COLOR_FMT = {
@@ -632,11 +644,10 @@ local RATING_COLOR_FMT = {
     bad = "|cffc04040%s|r",
 }
 
-function addon:FormatRatingText(value)
+function addon:FormatRatingText(value, axis)
     if not value then return "?" end
     local fmt = RATING_COLOR_FMT[value] or "%s"
-    local label = value:sub(1, 1):upper() .. value:sub(2)
-    return fmt:format(label)
+    return fmt:format(self:RatingWord(axis, value))
 end
 
 -- Shared small colored-square badge, used on unit frames (target/party/raid)
@@ -732,8 +743,8 @@ end
 -- leader/poster) without the world tooltip needing to know that concept.
 function addon:GetReviewTooltipVars(review, nameRealm, extra)
     local vars = {
-        social = self:FormatRatingText(review.social),
-        performance = self:FormatRatingText(review.performance),
+        social = self:FormatRatingText(review.social, "social"),
+        performance = self:FormatRatingText(review.performance, "performance"),
         socialNote = review.socialNote or "",
         performanceNote = review.performanceNote or "",
         count = tostring(nameRealm and #self:GetReviewsForPlayer(nameRealm) or 1),

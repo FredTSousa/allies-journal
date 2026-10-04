@@ -13,7 +13,7 @@ local TEMPLATE_HELP = table.concat({
     "Each line below becomes one tooltip line. Color codes work directly - e.g. ||cffff0000red text||r for red (use || instead of | so it isn't rendered here).",
     " ",
     "Placeholders (used as {name}):",
-    "  {social} / {performance} - colored Good/Average/Bad text",
+    "  {social} / {performance} - how it went, as colored text (Great to play with / Fine / Not for me, and Strong / Solid / Struggled)",
     "  {socialNote} / {performanceNote} - the text of the notes on it. A line containing ONLY one of these is dropped entirely when that note is empty.",
     "  {count} - how many notes this player has",
     "  {author} - who wrote the most recent note",
@@ -228,10 +228,10 @@ local function BuildGeneral(scroll)
     end)
 
     Section(scroll, "Recent Allies", function(group)
-        AddCheckbox(group, "Also pin players I noted as Bad",
+        AddCheckbox(group, "Also pin players I marked 'Not for me' or 'Struggled'",
             function() return settings.recentAllies.pinBad end,
             function(v) settings.recentAllies.pinBad = v end)
-        AddNote(group, "Players with notes are pinned in Blizzard's Recent Allies list with a short note. By default a player you noted as Bad (for how they were to play with, or how they played) is left out. This applies everywhere a pin is made: saving a note, regrouping, Pin Journal, and resyncing. It doesn't remove pins that already exist.")
+        AddNote(group, "Players with notes are pinned in Blizzard's Recent Allies list with a short note. By default a player you marked 'Not for me' (Social) or 'Struggled' (Performance) is left out. This applies everywhere a pin is made: saving a note, regrouping, Pin Journal, and resyncing. It doesn't remove pins that already exist.")
     end)
 
     Section(scroll, "Minimap button", function(group)

@@ -80,7 +80,7 @@ local ROLE_FILTER_LABELS = { All = "All", tank = "Tank", healer = "Healer", dps 
 local SOURCE_FILTERS = { "All", "recent", "other" }
 local SOURCE_FILTER_LABELS = { All = "All", recent = "In Recent Allies", other = "Not in Recent Allies" }
 local RATING_FILTERS = { "All", "good", "average", "bad", "none" }
-local RATING_FILTER_LABELS = { All = "All", good = "Good", average = "Average", bad = "Bad", none = "No note" }
+local RATING_FILTER_LABELS = { All = "All", good = "Great", average = "Mixed", bad = "Not great", none = "No note" }
 
 local function ReviewClass(review)
     if not review then return "none" end
@@ -304,12 +304,11 @@ do
 end
 
 local RATING_COLORS = { good = "|cff40ff40", average = "|cffffd100", bad = "|cffff4040" }
-local RATING_NAMES = { good = "Good", average = "Average", bad = "Bad" }
 
-local function RatingText(rating)
+local function RatingText(axis, rating)
     local color = RATING_COLORS[rating]
     if not color then return tostring(rating or "-") end
-    return color .. RATING_NAMES[rating] .. "|r"
+    return color .. addon:RatingWord(axis, rating) .. "|r"
 end
 
 -- Card accent bar = online status, matching the status icon: green online,
@@ -917,7 +916,7 @@ function Browser:RefreshList()
             end
             local summary
             if latest then
-                summary = string.format('Social: %s   Perf: %s', RatingText(latest.social), RatingText(latest.performance))
+                summary = string.format('Social: %s   Perf: %s', RatingText("social", latest.social), RatingText("performance", latest.performance))
             else
                 summary = string.format('|cff888888No reviews yet - %d session(s)|r', #record.sessions)
             end
@@ -1111,8 +1110,8 @@ function Browser:ShowHistory(nameRealm)
         local roleText = review.role and (addon:RoleIconText(review.role, 14) .. review.role:upper()) or ""
         local lines = {
             string.format("|cffffd100%s|r  %s%s  %s", review.encounter or "Unknown", GRAY, dateStr, roleText) .. "|r",
-            "Social: " .. RatingText(review.social) .. NoteText(review.socialNote),
-            "Perf: " .. RatingText(review.performance) .. NoteText(review.performanceNote),
+            "Social: " .. RatingText("social", review.social) .. NoteText(review.socialNote),
+            "Perf: " .. RatingText("performance", review.performance) .. NoteText(review.performanceNote),
         }
         local dmg = StatLine("Damage", "DPS", review.dps, review.groupMaxDps, review.groupTotalDps)
         local heal = StatLine("Healing", "HPS", review.hps, review.groupMaxHps, review.groupTotalHps)

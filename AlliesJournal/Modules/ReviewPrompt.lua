@@ -4,7 +4,6 @@ local AceGUI = LibStub("AceGUI-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
 local RATING_ORDER = { "good", "average", "bad" }
-local RATING_LABELS = { good = "Good", average = "Average", bad = "Bad" }
 local ROLE_ORDER = { "tank", "healer", "dps" }
 local ROLE_LABELS = { tank = "Tank", healer = "Healer", dps = "DPS" }
 
@@ -229,7 +228,7 @@ local TAGS = {
 }
 
 -- The Recent Allies note mirrors the review in 127 characters, and its
--- fixed "[PR] Social: X, Perf: Y - " prefix uses up to ~36 of those, so
+-- fixed "[AJ] <social>, <perf> - " prefix uses up to ~36 of those, so
 -- roughly this much of a note survives there.
 local NOTE_SOFT_LIMIT = 90
 
@@ -364,7 +363,7 @@ function ReviewPrompt:BuildFrame()
     skipBtn:SetCallback("OnClick", function() self:Skip() end)
     buttonRow:AddChild(skipBtn)
 
-    -- Reads "Save as Average" while nothing has been touched (see
+    -- Reads "Save as Fine / Solid" while nothing has been touched (see
     -- RefreshRequirements) - the one-click path for an unremarkable run.
     local saveBtn = AceGUI:Create("Button")
     saveBtn:SetText(L["Save"])
@@ -430,9 +429,9 @@ function ReviewPrompt:RefreshRequirements()
 
         if note then
             if required and empty then
-                note:SetLabel("|cffff4040" .. name .. " note - required for " .. RATING_LABELS[form[key]] .. "|r")
+                note:SetLabel("|cffff4040" .. name .. " note - required for " .. addon:RatingWord(key, form[key]) .. "|r")
             elseif required then
-                note:SetLabel(name .. " note (required for " .. RATING_LABELS[form[key]] .. ")" .. CounterText(noteText))
+                note:SetLabel(name .. " note (required for " .. addon:RatingWord(key, form[key]) .. ")" .. CounterText(noteText))
             else
                 note:SetLabel("|cff999999" .. name .. " note (optional)|r" .. CounterText(noteText))
             end
@@ -457,7 +456,7 @@ function ReviewPrompt:RefreshRequirements()
         self.saveBtn:SetDisabled(#missing > 0)
         local untouched = form.social == "average" and form.performance == "average"
             and strtrim(form.socialNote or "") == "" and strtrim(form.performanceNote or "") == ""
-        self.saveBtn:SetText(untouched and "Save as Average" or L["Save"])
+        self.saveBtn:SetText(untouched and "Save as Fine / Solid" or L["Save"])
     end
 end
 
@@ -529,9 +528,9 @@ function ReviewPrompt:AddRatingSection(frame, key, label)
     self.ratingBoxes[key] = {}
     for _, value in ipairs(RATING_ORDER) do
         local cb = AceGUI:Create("CheckBox")
-        cb:SetLabel(RATING_COLORS[value] .. RATING_LABELS[value] .. "|r")
+        cb:SetLabel(RATING_COLORS[value] .. addon:RatingWord(key, value) .. "|r")
         cb:SetType("radio")
-        cb:SetWidth(120)
+        cb:SetWidth(150)
         cb:SetValue(self.form[key] == value)
         cb:SetCallback("OnValueChanged", function(widget, event, checked)
             if not checked then
