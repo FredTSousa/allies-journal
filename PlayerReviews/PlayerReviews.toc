@@ -1,0 +1,34 @@
+## Interface: 16001
+## AllowLoadGameType: camelot
+## Title: Player Reviews
+## Notes: Rate the players you group with, see their reviews on frames, tooltips and Group Finder, and keep your history.
+## Author: FredTSousa
+## Version: @project-version@
+## Category: Social
+## IconTexture: Interface\COMMON\FavoritesIcon
+## SavedVariables: PRTrackerAccountDB
+## SavedVariablesPerCharacter: PRTrackerDB
+## DefaultState: Enabled
+## X-Website: https://github.com/FredTSousa/Player-reviews
+## X-Curse-Project-ID: 0
+## X-WoWI-ID: 0
+## X-Wago-ID: 0
+
+Libs\embeds.xml
+
+Locales\enUS.lua
+
+Core\Init.lua
+Core\Database.lua
+
+Modules\ReviewCapture.lua
+Modules\ChatLog.lua
+Modules\RosterTracker.lua
+Modules\ReviewPrompt.lua
+Modules\Tooltip.lua
+Modules\Browser.lua
+Modules\LFGAnnotate.lua
+Modules\Export.lua
+Modules\WhoCheck.lua
+Modules\Options.lua
+Modules\MinimapButton.lua

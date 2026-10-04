@@ -1,0 +1,32 @@
+name: Package and release
+
+# Builds the addon zip with BigWigs Packager and uploads it to CurseForge,
+# WoWInterface and Wago whenever a version tag is pushed (e.g. v1.0.0).
+# Each upload is skipped unless its token secret is set in the repository
+# settings (CF_API_TOKEN, WOWI_API_TOKEN, WAGO_API_TOKEN) AND the matching
+# X-*-ID in PlayerReviews/PlayerReviews.toc is filled in. A GitHub release is
+# created from the same zip.
+
+on:
+  push:
+    tags:
+      - "**"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      WOWI_API_TOKEN: ${{ secrets.WOWI_API_TOKEN }}
+      WAGO_API_TOKEN: ${{ secrets.WAGO_API_TOKEN }}
+      GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # the packager reads tags and history for the version
+      - uses: BigWigsMods/packager@v2
+        with:
+          # The addon lives in PlayerReviews/ rather than at the repo root.
+          args: -t PlayerReviews

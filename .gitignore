@@ -1,0 +1,11 @@
+# Claude Code local settings
+.claude/settings.local.json
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+
+# Local project notes (not published)
+CLAUDE.md
+DESIGN.md

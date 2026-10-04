@@ -1,0 +1,17 @@
+local L = LibStub("AceLocale-3.0"):NewLocale("PlayerReview", "enUS", true)
+if not L then return end
+
+L["Social"] = "Social"
+L["Performance"] = "Performance"
+L["Skip"] = "Skip"
+L["Save"] = "Save"
+L["Note (required)"] = "Note (required)"
+L["Note (optional)"] = "Note (optional)"
+L["A note is required when Social is not Average."] = "A note is required when Social is not Average."
+L["A note is required when Performance is not Average."] = "A note is required when Performance is not Average."
+L["Search"] = "Search"
+L["Role"] = "Role"
+L["Reviewed"] = "Reviewed"
+L["Social:"] = "Social:"
+L["Perf:"] = "Perf:"
+L["Delete"] = "Delete"
