@@ -319,6 +319,13 @@ local function BuildSessions(scroll)
     local sessionGate = settings.sessionGate
     local retention = settings.retention
 
+    Section(scroll, "When a review window opens", function(group)
+        AddNote(group, "After a dungeon, or when someone leaves your group, a review window opens for anyone you were grouped with for at least this long. Shorter than this, you only get a recap line in chat, and you can still right-click their name to review them.")
+        AddSlider(group, "Minimum time grouped (minutes)", 1, 60, 1,
+            function() return settings.gateMinutes or 10 end,
+            function(v) settings.gateMinutes = v end)
+    end)
+
     Section(scroll, "When a session is recorded", function(group)
         AddNote(group, "A session (grouped time, combat time, DPS/HPS) is saved only when BOTH minimums below are met. This keeps out non-combat grouping and trivial world mob-tagging.")
         AddSlider(group, "Minimum time grouped (minutes)", 0, 30, 1,
@@ -490,6 +497,7 @@ function Options:ResetAll()
         settings.browserColors[key] = { unpack(color) }
     end
     addon:GetModule("Browser"):ApplyColors()
+    settings.gateMinutes = 10
     settings.minimap = { hide = false, angle = 215, minimapPos = 215 }
     settings.lfg = { showLocation = true, locAnchor = "BOTTOMRIGHT", locRel = "BOTTOMRIGHT", locX = -8, locY = 6 }
     addon:GetModule("MinimapButton"):Refresh()
