@@ -385,8 +385,8 @@ end
 -- also cleared whenever the widget is released - otherwise a recycled box
 -- could keep a stale red border somewhere it doesn't belong.
 local function TintInputBorder(note, r, g, b)
-    if not note.prtrackerTintHooked then
-        note.prtrackerTintHooked = true
+    if not note.ajTintHooked then
+        note.ajTintHooked = true
         local originalOnRelease = note.OnRelease
         note.OnRelease = function(self, ...)
             for _, region in ipairs({ self.editbox:GetRegions() }) do
