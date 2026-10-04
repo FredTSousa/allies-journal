@@ -26,7 +26,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # the packager reads tags and history for the version
+      # The addon lives in the PlayerReviews/ subfolder; .pkgmeta (move-folders)
+      # tells the packager how to build the zip from it.
       - uses: BigWigsMods/packager@v2
-        with:
-          # The addon lives in PlayerReviews/ rather than at the repo root.
-          args: -t PlayerReviews

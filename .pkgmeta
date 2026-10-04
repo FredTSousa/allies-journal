@@ -1,0 +1,21 @@
+package-as: PlayerReviews
+
+# The addon lives in the PlayerReviews/ subfolder of this repo, so move its
+# contents up to the package root. Everything else in the repo (README,
+# workflow, assets) is ignored below and never ends up in the zip.
+move-folders:
+  PlayerReviews/PlayerReviews: PlayerReviews
+
+# The libraries in PlayerReviews/Libs/ are committed to the repo, so nothing
+# is fetched as an external at package time.
+
+manual-changelog:
+  filename: PlayerReviews/CHANGELOG.md
+  markup-type: markdown
+
+ignore:
+  - .github
+  - .gitignore
+  - .gitattributes
+  - assets
+  - README.md

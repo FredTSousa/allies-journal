@@ -9,3 +9,6 @@ Thumbs.db
 # Local project notes (not published)
 CLAUDE.md
 DESIGN.md
+
+# Local packager output
+.release/
