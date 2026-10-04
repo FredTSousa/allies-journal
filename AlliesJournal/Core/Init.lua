@@ -433,7 +433,7 @@ function AlliesJournal:SlashCommand(input)
         self:Print("  /aj options (or /aj config) - open the settings window")
         self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/notes) without opening the browser")
         self:Print("  /aj minimap - show or hide the minimap button")
-        self:Print("  /aj pinjournal - pin every player with a note who isn't pinned in Recent Allies yet (skips anyone with a bad rating unless that's turned on in /aj options)")
+        self:Print("  /aj pinjournal - pin every player with a note who isn't pinned in Recent Allies yet (skips anyone noted as Bad unless that's turned on in /aj options)")
         self:Print("  /aj resyncrecentallies - re-applies the pin/note to every journaled player's C_RecentAllies entry using their latest note, for notes saved before the name-based GUID fallback existed")
         if self.db.global.settings.developerTools then
             self:Print("Developer tools (/aj dev turns these off):")
@@ -611,7 +611,7 @@ function AlliesJournal:PinReviewedAllies()
         end
     end
     self:Print(string.format(
-        "Pin journal: %d pinned, %d still retrying, %d already pinned, %d skipped (bad rating), %d not in Recent Allies.",
+        "Pin journal: %d pinned, %d still retrying, %d already pinned, %d skipped (noted as Bad), %d not in Recent Allies.",
         pinned, queued, alreadyPinned, skippedBad, notKnown))
 end
 

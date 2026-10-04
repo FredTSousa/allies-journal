@@ -228,10 +228,10 @@ local function BuildGeneral(scroll)
     end)
 
     Section(scroll, "Recent Allies", function(group)
-        AddCheckbox(group, "Also pin players I rated Bad",
+        AddCheckbox(group, "Also pin players I noted as Bad",
             function() return settings.recentAllies.pinBad end,
             function(v) settings.recentAllies.pinBad = v end)
-        AddNote(group, "Players with notes are pinned in Blizzard's Recent Allies list with a short note. By default a player with a Bad social or performance rating is left out. This applies everywhere a pin is made: saving a note, regrouping, Pin Journal, and resyncing. It doesn't remove pins that already exist.")
+        AddNote(group, "Players with notes are pinned in Blizzard's Recent Allies list with a short note. By default a player you noted as Bad (for how they were to play with, or how they played) is left out. This applies everywhere a pin is made: saving a note, regrouping, Pin Journal, and resyncing. It doesn't remove pins that already exist.")
     end)
 
     Section(scroll, "Minimap button", function(group)
@@ -368,7 +368,7 @@ local function BuildBadges(scroll)
     end)
 
     Section(scroll, "Badge icon", function(group)
-        AddNote(group, "Shared by both badges, tinted by the player's rating. A blank path draws a flat color square. Tex coords slice one image out of a sprite sheet (the Star preset shows half its file); 0,1,0,1 is the whole image.")
+        AddNote(group, "Shared by both badges, tinted by how it went with that player (the worse of Social and Performance). A blank path draws a flat color square. Tex coords slice one image out of a sprite sheet (the Star preset shows half its file); 0,1,0,1 is the whole image.")
 
         local pathBox, coordBox
         local function CoordText()

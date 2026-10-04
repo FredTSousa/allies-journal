@@ -307,7 +307,7 @@ end
 function addon:SyncRecentAlly(guid, review, nameRealm, quiet)
     if not self:ShouldPinReview(review) then
         if not quiet then
-            self:Print((self:GetShortName(nameRealm) or "Player") .. " has a bad rating, so they aren't pinned in Recent Allies (change this in /aj options).")
+            self:Print((self:GetShortName(nameRealm) or "Player") .. " is noted as Bad, so they aren't pinned in Recent Allies (change this in /aj options).")
         end
         return false
     end

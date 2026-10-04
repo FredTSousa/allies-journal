@@ -736,7 +736,7 @@ function Browser:Refresh()
     frame:AddChild(roleDropdown)
 
     local ratingDropdown = AceGUI:Create("Dropdown")
-    ratingDropdown:SetLabel("Rating")
+    ratingDropdown:SetLabel("How it went")
     ratingDropdown:SetWidth(120)
     ratingDropdown:SetList(RATING_FILTER_LABELS, RATING_FILTERS)
     ratingDropdown:SetValue(self.ratingFilter)

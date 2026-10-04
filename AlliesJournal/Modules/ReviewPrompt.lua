@@ -430,9 +430,9 @@ function ReviewPrompt:RefreshRequirements()
 
         if note then
             if required and empty then
-                note:SetLabel("|cffff4040" .. name .. " note - required for a " .. RATING_LABELS[form[key]] .. " rating|r")
+                note:SetLabel("|cffff4040" .. name .. " note - required for " .. RATING_LABELS[form[key]] .. "|r")
             elseif required then
-                note:SetLabel(name .. " note (required for a " .. RATING_LABELS[form[key]] .. " rating)" .. CounterText(noteText))
+                note:SetLabel(name .. " note (required for " .. RATING_LABELS[form[key]] .. ")" .. CounterText(noteText))
             else
                 note:SetLabel("|cff999999" .. name .. " note (optional)|r" .. CounterText(noteText))
             end
