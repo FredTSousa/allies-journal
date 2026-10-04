@@ -105,7 +105,7 @@ function ReviewPrompt:Save()
         self.editingReviewID = nil
         self.active = false
         if self.frame then self.frame:Hide() end
-        addon:GetModule("Tooltip"):RefreshFrames()
+        addon:GetModule("Tooltip"):RefreshFramesSoon()
         addon:GetModule("Browser"):RefreshIfShown()
         pcall(function() addon:GetModule("LFGAnnotate"):ScanBrowseResults() end)
         return
@@ -161,7 +161,7 @@ function ReviewPrompt:Save()
     addon:SyncRecentAlly(data.guid or addon:FindRecentAllyGUID(data.nameRealm), form, data.nameRealm)
 
     addon:GetModule("ChatLog"):Clear(data.guid)
-    addon:GetModule("Tooltip"):RefreshFrames()
+    addon:GetModule("Tooltip"):RefreshFramesSoon()
     addon:GetModule("Browser"):RefreshIfShown()
     -- Otherwise the new badge/tooltip only appears after LFGAnnotate's own
     -- 1s ticker happens to fire next, or a full /reload - force an

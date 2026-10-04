@@ -672,3 +672,12 @@ function Tooltip:RefreshFrames()
     RefreshUnitFrames()
     ForEachGroupFrame(UpdateReviewBadge)
 end
+
+-- Repaints now and again shortly after. Used when a review is saved: a
+-- custom frame addon (EllesmereUI) may redraw its own buttons a moment
+-- later, and a badge painted before that can be lost.
+function Tooltip:RefreshFramesSoon()
+    self:RefreshFrames()
+    C_Timer.After(0.5, function() Tooltip:RefreshFrames() end)
+    C_Timer.After(2, function() Tooltip:RefreshFrames() end)
+end
