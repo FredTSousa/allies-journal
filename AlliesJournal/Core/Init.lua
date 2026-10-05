@@ -165,6 +165,7 @@ function AlliesJournal:OnInitialize()
     g.settings.notices = g.settings.notices or {}
     if g.settings.notices.joinNotice == nil then g.settings.notices.joinNotice = true end
     if g.settings.notices.onlineAlerts == nil then g.settings.notices.onlineAlerts = true end
+    if g.settings.notices.facesSummary == nil then g.settings.notices.facesSummary = true end
     g.settings.browserList.cardFade = g.settings.browserList.cardFade or 0.25
     g.settings.browserList.offlineDim = g.settings.browserList.offlineDim or 0.55
     -- Visual settings, editable live via /pr options. Every field uses its

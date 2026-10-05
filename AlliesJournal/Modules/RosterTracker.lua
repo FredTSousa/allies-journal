@@ -416,6 +416,8 @@ function RosterTracker:QueueEntireRoster(runId)
         table.insert(candidates, { guid = guid, data = data, since = self.groupedSince[guid] })
     end
     self:QueueCandidates(candidates, true, runId)
+    -- After the sessions above are recorded, so the counts include this run.
+    if runId then addon:GetModule("Notices"):FamiliarFaces(candidates, runId) end
 end
 
 -- Runs alongside (not instead of) the review-prompt gate below, on the

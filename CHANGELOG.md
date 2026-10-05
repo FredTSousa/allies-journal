@@ -3,6 +3,7 @@
 ## 0.3.0-beta
 
 - A line in chat when someone you have a note on joins your group (how it went, how many sessions together, and your note). Not in raids.
+- At the end of a dungeon, a line in chat listing who in the group you already have a note on ("Familiar faces this run"). Not in raids.
 - A line in chat when someone you noted as Great comes online. Both reminders can be switched off in `/aj options`.
 - A right-click menu on a player's card in `/aj`: Whisper, Invite, Add Friend, Add Note and View history.
 - A journal-style icon for the minimap button and the addon list.

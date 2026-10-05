@@ -28,8 +28,9 @@ local function ColoredName(shortName, classFile)
 end
 
 -- "Great to play with, 3 sessions together - your note: friendly healer", or
--- nil when there's no note on this player.
-function Notices:Describe(nameRealm)
+-- nil when there's no note on this player. withoutNote leaves your own
+-- words out (for a compact list).
+function Notices:Describe(nameRealm, withoutNote)
     local review = addon:GetLatestReview(nameRealm)
     if not review then return nil end
 
@@ -45,7 +46,7 @@ function Notices:Describe(nameRealm)
 
     local note = strtrim(review.socialNote or "")
     if note == "" then note = strtrim(review.performanceNote or "") end
-    if note ~= "" then
+    if note ~= "" and not withoutNote then
         if #note > NOTE_PREVIEW then note = note:sub(1, NOTE_PREVIEW - 3) .. "..." end
         text = text .. " - your note: |cffdddddd" .. note .. "|r"
     end
@@ -71,6 +72,35 @@ function Notices:PlayerJoined(nameRealm, classFile)
     if OnCooldown(self, "join", nameRealm, JOIN_COOLDOWN) then return end
 
     addon:Print(string.format("%s joined - %s", ColoredName(addon:GetShortName(nameRealm), classFile), description))
+end
+
+-- At the end of a dungeon: who in the group you already have a note on.
+-- candidates is the same roster list RosterTracker uses for the prompts.
+-- Said once per run, however many completion triggers fire.
+Notices.facesShown = {}
+
+function Notices:FamiliarFaces(candidates, runId)
+    local s = Settings()
+    if not s or not s.facesSummary or not runId or self.facesShown[runId] then return end
+
+    local entries = {}
+    for _, c in ipairs(candidates) do
+        local nameRealm = c.data and c.data.nameRealm
+        local description = nameRealm and self:Describe(nameRealm, true)
+        if description then
+            local okClass, _, classFile = pcall(GetPlayerInfoByGUID, c.guid)
+            table.insert(entries, string.format("%s (%s)",
+                ColoredName(addon:GetShortName(nameRealm), okClass and classFile or nil), description))
+        end
+    end
+    if #entries == 0 then return end
+    self.facesShown[runId] = true
+
+    local shown = {}
+    for i = 1, math.min(#entries, 6) do shown[i] = entries[i] end
+    local line = "Familiar faces this run: " .. table.concat(shown, ", ")
+    if #entries > 6 then line = line .. string.format(" and %d more", #entries - 6) end
+    addon:Print(line)
 end
 
 ----------------------------------------------------------------------
