@@ -673,25 +673,36 @@ function AlliesJournal:QueueTestBatch()
     }
     local fightNames = { "Elder Mottled Boar", "Bloodtalon Taillasher", "Deviate Slayer" }
     local chatLog = self:GetModule("ChatLog")
+
+    -- One shared record per fight, like a real run: everyone sees the same bars,
+    -- and only their own numbers (and which bar is highlighted) differ.
+    local shared = {}
+    for f = 1, 3 do
+        local breakdown = {}
+        for _, m in ipairs(members) do
+            table.insert(breakdown, { guid = m.guid, nameRealm = m.nameRealm, dps = math.random(200, 900) + math.random(),
+                hps = 0, class = m.class, role = m.role })
+        end
+        table.sort(breakdown, function(x, y) return x.dps > y.dps end)
+        local total = 0
+        for _, m in ipairs(breakdown) do total = total + m.dps end
+        shared[f] = { duration = 15 + math.random(0, 30), breakdown = breakdown, total = total, name = fightNames[f] }
+    end
+
     local list = {}
     for index = 1, 3 do
         local subject = members[index]
         local fights = {}
         for f = 1, 3 do
-            local breakdown = {}
-            for _, m in ipairs(members) do
-                table.insert(breakdown, { guid = m.guid, nameRealm = m.nameRealm, dps = math.random(200, 900) + math.random(),
-                    hps = 0, class = m.class, role = m.role })
-            end
-            table.sort(breakdown, function(a, b) return a.dps > b.dps end)
-            local rank, dps, total = nil, nil, 0
-            for r, m in ipairs(breakdown) do
-                total = total + m.dps
+            local fight = shared[f]
+            local rank, dps
+            for r, m in ipairs(fight.breakdown) do
                 if m.guid == subject.guid then rank, dps = r, m.dps end
             end
             table.insert(fights, {
-                duration = 15 + math.random(0, 30), dps = dps, hps = 0, dpsRank = rank, groupDpsCount = #breakdown,
-                groupMaxDps = breakdown[1].dps, groupTotalDps = total, groupBreakdown = breakdown, name = fightNames[f],
+                duration = fight.duration, dps = dps, hps = 0, dpsRank = rank, groupDpsCount = #fight.breakdown,
+                groupMaxDps = fight.breakdown[1].dps, groupTotalDps = fight.total,
+                groupBreakdown = fight.breakdown, name = fight.name,
             })
         end
         chatLog.messages[subject.guid] = nil
