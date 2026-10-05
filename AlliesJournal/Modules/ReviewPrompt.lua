@@ -1464,3 +1464,85 @@ function ReviewPrompt:UpdateReminders()
     end
     addon:GetModule("MinimapButton"):SetAttention(waiting)
 end
+
+----------------------------------------------------------------------
+-- Surviving a /reload or relog
+----------------------------------------------------------------------
+-- Notes that are still waiting (open or put off with Later) are written to the
+-- saved variables when the game logs out or reloads, and picked up again a few
+-- seconds after the next login, so a /reload doesn't throw them away. Kept
+-- outside `global` (in AlliesJournalDB.pendingNotes) so it never ends up in an
+-- export, and only for a while: after 12 hours it is dropped.
+
+local PENDING_MAX_AGE = 12 * 3600
+
+function ReviewPrompt:OnEnable()
+    self:RegisterEvent("PLAYER_LOGOUT", "SavePending")
+    C_Timer.After(3, function() self:RestorePending() end)
+end
+
+function ReviewPrompt:SavePending()
+    local db = AlliesJournalDB
+    if not db then return end
+    db.pendingNotes = nil
+    if not self.group or self.editingReviewID or self:PendingCount() == 0 then return end
+
+    local chatLog = addon:GetModule("ChatLog")
+    local chat = {}
+    for _, member in ipairs(self.group) do
+        local guid = member.data and member.data.guid
+        if member.status == "pending" and guid and chatLog.messages[guid] then
+            chat[guid] = chatLog.messages[guid]
+        end
+    end
+    db.pendingNotes = {
+        savedAt = time(),
+        index = self.groupIndex or 1,
+        open = (self.frame and self.frame:IsShown() and not self.groupHidden) and true or false,
+        members = self.group,
+        chat = chat,
+    }
+end
+
+function ReviewPrompt:RestorePending()
+    local db = AlliesJournalDB
+    local saved = db and db.pendingNotes
+    if not saved then return end
+    db.pendingNotes = nil  -- used up either way; saved again at the next logout
+
+    if self.group or self.active then return end  -- something has already started
+    if type(saved) ~= "table" or type(saved.members) ~= "table" or not saved.savedAt then return end
+    if time() - saved.savedAt > PENDING_MAX_AGE then return end
+
+    local members = {}
+    for _, member in ipairs(saved.members) do
+        if type(member) == "table" and type(member.data) == "table" and type(member.form) == "table"
+            and member.data.nameRealm then
+            table.insert(members, member)
+        end
+    end
+    if #members == 0 then return end
+
+    local chatLog = addon:GetModule("ChatLog")
+    for guid, messages in pairs(saved.chat or {}) do
+        if type(messages) == "table" then chatLog.messages[guid] = messages end
+    end
+
+    self.group = members
+    self.groupIndex = math.min(saved.index or 1, #members)
+    self.groupHidden = true
+    self.active = true
+    if self:PendingCount() == 0 then
+        self.group, self.groupIndex, self.groupHidden, self.active = nil, nil, false, false
+        return
+    end
+
+    if saved.open then
+        self:GroupReopen()
+    else
+        self:UpdateReminders()
+    end
+    local waiting = self:PendingCount()
+    addon:Print(string.format("Your %d note%s still waiting were kept through the reload. %s",
+        waiting, waiting == 1 and "" or "s", NOTES_LINK))
+end

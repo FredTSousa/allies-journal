@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1-beta
+
+- Notes you have not written yet (open or put off with Later) now survive a `/reload` or relog, for up to 12 hours.
+- The journal window has less empty space under the title bar.
+
 ## 0.3.0-beta
 
 - At the end of a run the whole group now shares one note window with a tab per person (fight bars, chat and quick tags all included), instead of a window each. It can be switched off in `/aj options`.
