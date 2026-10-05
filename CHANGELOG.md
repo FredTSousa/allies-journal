@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3-beta
+
+- `/aj numbers` has more: badges (like Night Owl and On a Roll), your longest streak and active days, a chart of how much you played over time, a comparison with the period before, and a **Copy as text** button for sharing.
+
 ## 0.3.2-beta
 
 - Fixed an error on login in 0.3.1-beta that stopped waiting notes from surviving a `/reload`.
