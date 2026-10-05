@@ -14,6 +14,13 @@ ReviewPrompt.shownCount = 0
 
 -- data: { nameRealm, encounter, role, guid, fights }
 function ReviewPrompt:QueueBatch(list)
+    -- Experimental (developer option): a whole group shares one window, with
+    -- a strip of names to move between people.
+    if addon.db.global.settings.playerStrip and #list >= 2 and not self.active then
+        self:StartGroup(list)
+        return
+    end
+
     for _, data in ipairs(list) do
         table.insert(self.queue, data)
     end
@@ -66,6 +73,10 @@ function ReviewPrompt:ShowNext()
 end
 
 function ReviewPrompt:Skip()
+    if self.group then
+        self:GroupAdvance("skipped")
+        return
+    end
     if self.editingReviewID then
         -- Cancel edit: just close, don't touch the queue - there may be
         -- an unrelated pending batch this edit interrupted.
@@ -180,7 +191,11 @@ function ReviewPrompt:Save()
     -- 1s ticker happens to fire next, or a full /reload - force an
     -- immediate rescan the same way the other two modules refresh here.
     pcall(function() addon:GetModule("LFGAnnotate"):ScanBrowseResults() end)
-    self:ShowNext()
+    if self.group then
+        self:GroupAdvance("saved")
+    else
+        self:ShowNext()
+    end
 end
 
 -- Separate entry point from the queue-driven ShowNext/QueueBatch flow
@@ -283,6 +298,11 @@ function ReviewPrompt:BuildFrame()
         frame:SetLayout("List")
         frame:EnableResize(false)
         frame:SetCallback("OnClose", function()
+            if self.group then
+                -- closing a group window skips everyone still waiting
+                self:GroupFinish()
+                return
+            end
             -- closing the window counts as skipping the current player
             self:Skip()
         end)
@@ -300,8 +320,11 @@ function ReviewPrompt:BuildFrame()
     outer:ReleaseChildren()
     outer:SetTitle(self.editingReviewID
         and ("Edit Note: " .. addon:GetShortName(data.nameRealm))
+        or self.group and string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.groupIndex, #self.group)
         or string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.shownCount, self.batchTotal))
     outer:Show()
+
+    if self.group then self:AddGroupStrip(outer) end
 
     -- Scrollable so a long form doesn't overflow the fixed-height window.
     -- Its height leaves room under it for the fixed footer (status line +
@@ -309,7 +332,7 @@ function ReviewPrompt:BuildFrame()
     local frame = AceGUI:Create("ScrollFrame")
     frame:SetLayout("List")
     frame:SetFullWidth(true)
-    frame:SetHeight(windowSettings.height - 110)
+    frame:SetHeight(windowSettings.height - 110 - (self.group and 36 or 0))
     outer:AddChild(frame)
 
     -- Everything below belongs to this build only - rating clicks update
@@ -325,7 +348,7 @@ function ReviewPrompt:BuildFrame()
     header:SetFullWidth(true)
     local headerText = data.encounter or "Unknown"
     local remaining = (self.batchTotal or 0) - (self.shownCount or 0)
-    if not self.editingReviewID and remaining > 0 then
+    if not self.editingReviewID and not self.group and remaining > 0 then
         headerText = headerText .. "   |cff999999- " .. remaining .. " more after this one|r"
     end
     header:SetText(headerText)
@@ -1084,4 +1107,123 @@ function ReviewPrompt:AddChatLogSection(frame, data)
     box:SetText(table.concat(lines, "\n"))
     box:SetDisabled(true)
     frame:AddChild(box)
+end
+
+----------------------------------------------------------------------
+-- Experimental: a whole group in one window (developer option)
+----------------------------------------------------------------------
+-- The same window as for one person, with all of its parts (fight bars, chat,
+-- quick tags, your usual questions). A strip of names across the top moves
+-- between people; each keeps their own form until saved or skipped.
+
+local function ClassColoredName(data)
+    local shortName = addon:GetShortName(data.nameRealm)
+    local ok, _, classFile = pcall(GetPlayerInfoByGUID, data.guid)
+    local color = ok and classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
+    if color and color.colorStr then return "|c" .. color.colorStr .. shortName .. "|r" end
+    return shortName
+end
+
+function ReviewPrompt:StartGroup(list)
+    self.active = true  -- anything queued meanwhile waits behind this window
+    self.group = {}
+    local simple = addon.db.global.settings.simpleNotes
+    for i, data in ipairs(list) do
+        local form = {
+            social = "average", performance = "average", socialNote = "", performanceNote = "",
+            role = data.role, mode = simple and "simple" or "detailed", selectedFights = {},
+        }
+        for j in ipairs(data.fights or {}) do form.selectedFights[j] = true end
+        self.group[i] = { data = data, form = form, status = "pending" }
+    end
+    self:ShowMember(1)
+    pcall(function()
+        self.frame.frame:SetAlpha(0)
+        UIFrameFadeIn(self.frame.frame, 0.25, 0, 1)
+    end)
+end
+
+function ReviewPrompt:ShowMember(index)
+    local member = self.group and self.group[index]
+    if not member then return end
+    self.groupIndex = index
+    self.current = member.data
+    self.form = member.form
+    self:BuildFrame()
+end
+
+-- The row of names above the form: saved people get a check, skipped ones
+-- are greyed, the one being shown has an arrow.
+function ReviewPrompt:AddGroupStrip(container)
+    local strip = AceGUI:Create("SimpleGroup")
+    strip:SetFullWidth(true)
+    strip:SetLayout("Flow")
+
+    for index, member in ipairs(self.group) do
+        local short = addon:GetShortName(member.data.nameRealm)
+        local text
+        if member.status == "saved" then
+            text = "|TInterface\\Buttons\\UI-CheckBox-Check:14|t |cff40ff40" .. short .. "|r"
+        elseif member.status == "skipped" then
+            text = "|cff808080" .. short .. "|r"
+        else
+            text = ClassColoredName(member.data)
+        end
+        if index == self.groupIndex then text = "|cffffd100>|r " .. text end
+
+        local btn = AceGUI:Create("Button")
+        btn:SetText(text)
+        btn:SetAutoWidth(true)
+        btn:SetHeight(22)
+        btn:SetDisabled(member.status == "saved")  -- already filed; opening it again would duplicate the note
+        btn:SetCallback("OnClick", function()
+            if index == self.groupIndex then return end
+            -- Rebuilt a moment later: this button is released by the rebuild.
+            C_Timer.After(0, function()
+                local target = self.group and self.group[index]
+                if not target then return end
+                if target.status == "skipped" then target.status = "pending" end
+                self:ShowMember(index)
+            end)
+        end)
+        strip:AddChild(btn)
+    end
+    container:AddChild(strip)
+end
+
+-- Marks the person being shown as saved or skipped and moves to the next
+-- one still waiting (wrapping around), or closes when nobody is left.
+function ReviewPrompt:GroupAdvance(status)
+    local member = self.group and self.group[self.groupIndex]
+    if not member then return end
+    member.status = status
+
+    local total = #self.group
+    for step = 1, total do
+        local index = (self.groupIndex - 1 + step) % total + 1
+        if self.group[index].status == "pending" then
+            C_Timer.After(0, function() self:ShowMember(index) end)
+            return
+        end
+    end
+    self:GroupFinish()
+end
+
+-- Closes the group window; anyone not saved is dropped, with their chat.
+function ReviewPrompt:GroupFinish()
+    for _, member in ipairs(self.group or {}) do
+        if member.status ~= "saved" then
+            addon:GetModule("ChatLog"):Clear(member.data.guid)
+        end
+    end
+    self.group, self.groupIndex = nil, nil
+    if self.frame then self.frame:Hide() end
+    self.active = false
+
+    -- Anything that arrived while this window was open gets the usual flow.
+    if #self.queue > 0 then
+        self.batchTotal = #self.queue
+        self.shownCount = 0
+        self:ShowNext()
+    end
 end

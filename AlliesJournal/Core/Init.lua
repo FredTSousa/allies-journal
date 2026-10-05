@@ -161,6 +161,8 @@ function AlliesJournal:OnInitialize()
     -- a note. Notes remember the mode they were written in, so flipping this
     -- never changes an existing note.
     if g.settings.simpleNotes == nil then g.settings.simpleNotes = false end
+    -- Experimental (developer option): a group at the end of a run shares one window with a strip of names.
+    if g.settings.playerStrip == nil then g.settings.playerStrip = false end
     -- Small chat reminders: someone you have a note on joins your group, and
     -- someone you noted as Great comes online.
     g.settings.notices = g.settings.notices or {}
@@ -307,6 +309,7 @@ end
 local DEV_COMMANDS = {
     test = true,
     testgroup = true,
+    testbatch = true,
     capturesave = true,
     capturereplay = true,
     menudebug = true,
@@ -350,6 +353,8 @@ function AlliesJournal:SlashCommand(input)
         self:QueueTestReview()
     elseif cmd == "testgroup" then
         self:QueueTestGroupReview()
+    elseif cmd == "testbatch" then
+        self:QueueTestBatch()
     elseif cmd == "capturesave" then
         self:GetModule("ReviewCapture"):SaveFightsForReplay(rest)
     elseif cmd == "capturereplay" then
@@ -458,6 +463,7 @@ function AlliesJournal:SlashCommand(input)
             self:Print("  /aj import - paste back a previous /aj export; merges in, never overwrites existing data")
             self:Print("  /aj test - queue a fake note window, no group needed (tests the UI only)")
             self:Print("  /aj testgroup - like /aj test but with 3 fake fights and 4 fake group members, to test the fight checklist and DPS bar chart without needing anyone else")
+            self:Print("  /aj testbatch - queue three fake players at once, to try the group window (developer experiment)")
             self:Print("  /aj capturesave [unit] - save real captured fight data for a unit (default: target) as copyable text, to replay later via /aj capturereplay")
             self:Print("  /aj capturereplay - paste back a previous /aj capturesave and open a note window using that exact real data, for repeated UI testing")
             self:Print("  /pr menudebug - toggle printing every right-click menu tag seen, to debug the context menu button")
@@ -655,6 +661,47 @@ end
 -- way without asking someone else to group up. Numbers are randomized
 -- (not fixed) so re-running this gives a fresh mix each time, closer to
 -- what real variance looks like.
+-- Three fake players at once, each with their own fights and chat, to try the
+-- group window (the "strip" developer option) without a real dungeon.
+function AlliesJournal:QueueTestBatch()
+    local realm = GetRealmName()
+    local members = {
+        { guid = "Fake-1", nameRealm = "Testmann-" .. realm, class = "WARRIOR", role = "tank" },
+        { guid = "Fake-2", nameRealm = "Fakename Two-" .. realm, class = "MAGE", role = "dps" },
+        { guid = "Fake-3", nameRealm = "Fakename Three-" .. realm, class = "PRIEST", role = "healer" },
+        { guid = "Fake-4", nameRealm = "Fakename Four-" .. realm, class = "ROGUE", role = "dps" },
+    }
+    local fightNames = { "Elder Mottled Boar", "Bloodtalon Taillasher", "Deviate Slayer" }
+    local chatLog = self:GetModule("ChatLog")
+    local list = {}
+    for index = 1, 3 do
+        local subject = members[index]
+        local fights = {}
+        for f = 1, 3 do
+            local breakdown = {}
+            for _, m in ipairs(members) do
+                table.insert(breakdown, { guid = m.guid, nameRealm = m.nameRealm, dps = math.random(200, 900) + math.random(),
+                    hps = 0, class = m.class, role = m.role })
+            end
+            table.sort(breakdown, function(a, b) return a.dps > b.dps end)
+            local rank, dps, total = nil, nil, 0
+            for r, m in ipairs(breakdown) do
+                total = total + m.dps
+                if m.guid == subject.guid then rank, dps = r, m.dps end
+            end
+            table.insert(fights, {
+                duration = 15 + math.random(0, 30), dps = dps, hps = 0, dpsRank = rank, groupDpsCount = #breakdown,
+                groupMaxDps = breakdown[1].dps, groupTotalDps = total, groupBreakdown = breakdown, name = fightNames[f],
+            })
+        end
+        chatLog.messages[subject.guid] = nil
+        chatLog:AppendMessage(subject.guid, "Party", "gg, thanks for the run", "them")
+        chatLog:AppendMessage(subject.guid, "Party", "thanks!", "self")
+        list[index] = { nameRealm = subject.nameRealm, encounter = "Test Dungeon", role = subject.role, guid = subject.guid, fights = fights }
+    end
+    self:GetModule("ReviewPrompt"):QueueBatch(list)
+end
+
 function AlliesJournal:QueueTestGroupReview()
     local myRealm = GetRealmName()
     local fakeMembers = {

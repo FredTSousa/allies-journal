@@ -278,6 +278,13 @@ local function BuildGeneral(scroll)
     -- Developer tools are switched on with a hidden slash command only; the
     -- extra settings below just appear while they're on.
     if settings.developerTools then
+        Section(scroll, "Experiments (developer)", function(group)
+            AddCheckbox(group, "At the end of a run, put the whole group in one window",
+                function() return settings.playerStrip end,
+                function(v) settings.playerStrip = v and true or false end)
+            AddNote(group, "The same note window, with a strip of names across the top to move between people. Each person keeps their own form until you save or skip them; saved people get a check. Used when two or more people are queued at once. Closing the window skips whoever is left.")
+        end)
+
         Section(scroll, "Player list colors (developer)", function(group)
             AddNote(group, "Colors and opacity of the /aj window. Changes show on an open window right away.")
             local Browser = addon:GetModule("Browser")
@@ -513,6 +520,7 @@ function Options:ResetAll()
     settings.browserList = { rowPadding = 4, cardFade = 0.25, offlineDim = 0.55 }
     settings.recentAllies = { pinBad = false }
     settings.simpleNotes = false
+    settings.playerStrip = false
     settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true }
     settings.browserWindow = { width = 550, height = 700 }
     addon:GetModule("Browser"):ApplyWindowSize()
