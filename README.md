@@ -14,6 +14,7 @@ I used to add players I liked as friends, and ended up with a huge list of names
 - **Group Finder.** Listings with someone from your journal get a badge and a tooltip with your note, and each listing shows where its leader currently is.
 - **Frames and tooltips.** A badge on target, party and raid frames, a line in the tooltip, and a mark next to their name in chat.
 - **Your journal (`/aj`).** Everyone you've written about or grouped with, with class, role, online status and your notes. Search it and filter by role, how it went, or whether they're in Recent Allies.
+- **Reminders.** A line in chat when someone you have a note on joins your group, and when someone you noted as Great comes online. Both can be turned off.
 - **Short groupings.** The note window only opens after you've been grouped for a while (10 minutes by default, set in the options). After a shorter grouping you get a line in chat with how long you were together and a reminder that you can right-click their name to add a note. Raids never prompt, but the data is still captured.
 
 ## Commands

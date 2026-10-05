@@ -1038,6 +1038,41 @@ function Browser:ShowHistory(nameRealm)
     title:SetFullWidth(true)
     detail:AddChild(title)
 
+    -- Quick actions, so someone you look up here can be reached without
+    -- leaving the journal. Each only works if the game lets an addon do it
+    -- from a click, so failures are reported instead of ignored.
+    local actions = AceGUI:Create("SimpleGroup")
+    actions:SetFullWidth(true)
+    actions:SetLayout("Flow")
+    local shortName = addon:GetShortName(nameRealm)
+    local function AddAction(text, tip, fn)
+        local btn = AceGUI:Create("Button")
+        btn:SetText(text)
+        btn:SetWidth(120)
+        btn:SetCallback("OnClick", function()
+            local ok, err = pcall(fn)
+            if not ok then addon:Print("Couldn't do that: " .. tostring(err)) end
+        end)
+        btn:SetCallback("OnEnter", function(widget)
+            GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
+            GameTooltip:SetText(tip, 1, 1, 1, 1, true)
+            GameTooltip:Show()
+        end)
+        btn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+        actions:AddChild(btn)
+    end
+    AddAction("Whisper", "Start a whisper to " .. shortName .. ".", function()
+        ChatFrame_SendTell(shortName)
+    end)
+    AddAction("Invite", "Invite " .. shortName .. " to your group (they need to be online).", function()
+        C_PartyInfo.InviteUnit(shortName)
+    end)
+    AddAction("Add Friend", "Add " .. shortName .. " to your friends list. Your note stays here in the journal.", function()
+        C_FriendList.AddFriend(shortName)
+        addon:Print("Sent a friend request to " .. shortName .. ".")
+    end)
+    detail:AddChild(actions)
+
     if allyData then
         local info = AceGUI:Create("Label")
         info:SetFullWidth(true)

@@ -271,6 +271,11 @@ function RosterTracker:OnRosterUpdate()
                     if review then
                         addon:SyncRecentAlly(guid, review, nameRealm, true)
                     end
+                    -- "You've played with them" - not in raids (too many people).
+                    if not raidContext then
+                        local okClass, _, classFile = pcall(UnitClass, unit)
+                        addon:GetModule("Notices"):PlayerJoined(nameRealm, okClass and classFile or nil)
+                    end
                 end
             end
         end
@@ -561,6 +566,9 @@ function RosterTracker:OnZoneCheck()
     local inInstance, instanceType = IsInInstance()
     local isDungeonNow = inInstance and instanceType == "party"
     self.inRaidInstance = inInstance and instanceType == "raid"
+    -- After a load screen or /reload everyone in the group looks new; stay
+    -- quiet for a few seconds so that isn't announced.
+    addon:GetModule("Notices").quietUntil = GetTime() + 8
 
     if isDungeonNow then
         self.currentEncounterName = GetInstanceInfo()

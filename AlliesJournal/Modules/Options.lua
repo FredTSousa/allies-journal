@@ -228,6 +228,17 @@ local function BuildGeneral(scroll)
         AddNote(group, "Shown as \"Wailing Caverns - The Barrens\" on every listing, with or without a note.")
     end)
 
+    Section(scroll, "Reminders", function(group)
+        local notices = settings.notices
+        AddCheckbox(group, "Tell me when someone I have a note on joins my group",
+            function() return notices.joinNotice end,
+            function(v) notices.joinNotice = v and true or false end)
+        AddCheckbox(group, "Tell me when someone I noted as Great comes online",
+            function() return notices.onlineAlerts end,
+            function(v) notices.onlineAlerts = v and true or false end)
+        AddNote(group, "Just a line in chat with how it went and your note. Nothing is sent to anyone. The online line relies on Blizzard's Recent Allies list telling the game when someone logs in.")
+    end)
+
     Section(scroll, "Writing a note", function(group)
         AddCheckbox(group, "Ask one question (\"How was it?\") instead of Social and Performance",
             function() return settings.simpleNotes end,
@@ -499,6 +510,7 @@ function Options:ResetAll()
     settings.browserList = { rowPadding = 4, cardFade = 0.25, offlineDim = 0.55 }
     settings.recentAllies = { pinBad = false }
     settings.simpleNotes = false
+    settings.notices = { joinNotice = true, onlineAlerts = true }
     settings.browserWindow = { width = 550, height = 700 }
     addon:GetModule("Browser"):ApplyWindowSize()
     settings.browserColors = {}
