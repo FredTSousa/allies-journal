@@ -613,7 +613,7 @@ end
 -- from the window's current height. 190 is everything else in the window
 -- (title, stats, buttons, filters, margins).
 function Browser:AreaHeights(hasSelection)
-    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 215 - addon.windowExtra, 200)
+    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 201 - addon.windowExtra, 200)
     if not hasSelection then return content, 0 end
     local list = math.floor(content * 0.40)
     return list, content - list
@@ -629,13 +629,6 @@ end
 function Browser:Refresh()
     local frame = self.frame
     frame:ReleaseChildren()
-
-    -- Breathing room below the window's title bar, before any real
-    -- content starts.
-    local topSpacer = AceGUI:Create("Label")
-    topSpacer:SetFullWidth(true)
-    topSpacer:SetText(" ")
-    frame:AddChild(topSpacer)
 
     -- Per-category size breakdown, visible every time the browser is
     -- open (not just on request via /pr stats) - the user's biggest
