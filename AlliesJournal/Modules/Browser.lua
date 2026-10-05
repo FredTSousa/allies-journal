@@ -953,7 +953,11 @@ function Browser:RefreshList()
                 badge = latest and { addon:GetWorstRatingRGB(latest) } or nil,
                 selected = (self.selectedNameRealm == record.nameRealm),
             })
-            card:SetCallback('OnClick', function()
+            card:SetCallback('OnClick', function(widget, event, button)
+                if button == 'RightButton' then
+                    self:ShowCardMenu(widget.card or widget.frame, record.nameRealm)
+                    return
+                end
                 if self.selectedNameRealm == record.nameRealm then
                     self:ClearSelection()
                 else
@@ -1009,6 +1013,52 @@ local function AddSeparator(container)
     container:AddChild(line)
 end
 
+-- What you can do with someone from the journal. Used by the buttons under a
+-- player's name and by the right-click menu on a card. Each only works if
+-- the game lets an addon do it from a click, so a failure is reported
+-- rather than ignored.
+function Browser:PlayerActions(nameRealm)
+    local shortName = addon:GetShortName(nameRealm)
+    local function Safe(fn)
+        return function()
+            local ok, err = pcall(fn)
+            if not ok then addon:Print("Couldn't do that: " .. tostring(err)) end
+        end
+    end
+    return {
+        { text = "Whisper", tip = "Start a whisper to " .. shortName .. ".",
+          run = Safe(function() ChatFrame_SendTell(shortName) end) },
+        { text = "Invite", tip = "Invite " .. shortName .. " to your group (they need to be online).",
+          run = Safe(function() C_PartyInfo.InviteUnit(shortName) end) },
+        { text = "Add Friend", tip = "Add " .. shortName .. " to your friends list. Your note stays here in the journal.",
+          run = Safe(function()
+              C_FriendList.AddFriend(shortName)
+              addon:Print("Sent a friend request to " .. shortName .. ".")
+          end) },
+        { text = "Add Note", menuOnly = true, tip = "Write a new note on " .. shortName .. ".",
+          run = Safe(function()
+              if not addon:GetModule("RosterTracker"):QueueDeparted(nameRealm) then
+                  addon:DoQueueNameForReview(nameRealm)
+              end
+          end) },
+    }
+end
+
+-- Right-click on a card in the list.
+function Browser:ShowCardMenu(owner, nameRealm)
+    if not (MenuUtil and MenuUtil.CreateContextMenu) then
+        addon:Print("The game's menu isn't available here - use the buttons under their name.")
+        return
+    end
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(addon:GetShortName(nameRealm))
+        for _, action in ipairs(self:PlayerActions(nameRealm)) do
+            root:CreateButton(action.text, action.run)
+        end
+        root:CreateButton("View history", function() self:ShowHistory(nameRealm) end)
+    end)
+end
+
 function Browser:ShowHistory(nameRealm)
     -- First selection (no detail area yet): rebuild the window with the
     -- list shrunk and the detail area present - Refresh calls back into
@@ -1044,33 +1094,21 @@ function Browser:ShowHistory(nameRealm)
     local actions = AceGUI:Create("SimpleGroup")
     actions:SetFullWidth(true)
     actions:SetLayout("Flow")
-    local shortName = addon:GetShortName(nameRealm)
-    local function AddAction(text, tip, fn)
-        local btn = AceGUI:Create("Button")
-        btn:SetText(text)
-        btn:SetWidth(120)
-        btn:SetCallback("OnClick", function()
-            local ok, err = pcall(fn)
-            if not ok then addon:Print("Couldn't do that: " .. tostring(err)) end
-        end)
-        btn:SetCallback("OnEnter", function(widget)
-            GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
-            GameTooltip:SetText(tip, 1, 1, 1, 1, true)
-            GameTooltip:Show()
-        end)
-        btn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
-        actions:AddChild(btn)
+    for _, action in ipairs(self:PlayerActions(nameRealm)) do
+        if not action.menuOnly then
+            local btn = AceGUI:Create("Button")
+            btn:SetText(action.text)
+            btn:SetWidth(120)
+            btn:SetCallback("OnClick", action.run)
+            btn:SetCallback("OnEnter", function(widget)
+                GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
+                GameTooltip:SetText(action.tip, 1, 1, 1, 1, true)
+                GameTooltip:Show()
+            end)
+            btn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+            actions:AddChild(btn)
+        end
     end
-    AddAction("Whisper", "Start a whisper to " .. shortName .. ".", function()
-        ChatFrame_SendTell(shortName)
-    end)
-    AddAction("Invite", "Invite " .. shortName .. " to your group (they need to be online).", function()
-        C_PartyInfo.InviteUnit(shortName)
-    end)
-    AddAction("Add Friend", "Add " .. shortName .. " to your friends list. Your note stays here in the journal.", function()
-        C_FriendList.AddFriend(shortName)
-        addon:Print("Sent a friend request to " .. shortName .. ".")
-    end)
     detail:AddChild(actions)
 
     if allyData then
