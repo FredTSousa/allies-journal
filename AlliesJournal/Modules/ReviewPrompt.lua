@@ -54,6 +54,18 @@ function ReviewPrompt:QueueBatch(list, asked)
         return
     end
 
+    -- A single note window is open and someone asked for another note: turn it
+    -- into a group window (keeping what is typed) so the new person gets a tab
+    -- and is shown, instead of waiting behind it in the queue.
+    if asked and self.active and self.current and not self.editingReviewID
+        and addon.db.global.settings.playerStrip then
+        self.group = { { data = self.current, form = self.form, status = "pending" } }
+        self.groupIndex = 1
+        self.groupHidden = false
+        self:AddToGroup(list, true)
+        return
+    end
+
     -- A whole group shares one window, with a tab per person.
     if addon.db.global.settings.playerStrip and #list >= 2 and not self.active then
         self:StartGroup(list)
