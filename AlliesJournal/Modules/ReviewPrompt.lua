@@ -4,7 +4,8 @@ local AceGUI = LibStub("AceGUI-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
 -- Makes a stock Button look like the main action: the same Blizzard button
--- (bevel, hover and pressed states and all) tinted green and a little taller.
+-- (bevel, hover and pressed states and all) tinted blue and a little taller.
+-- Blue because green, yellow and red already mean how a run went.
 -- Buttons are pooled and shared, so the original look is put back when it is
 -- released.
 local function StyleAsPrimary(button)
@@ -12,7 +13,7 @@ local function StyleAsPrimary(button)
     local function Tint(texture, on)
         if not texture or not texture.SetVertexColor then return end
         if texture.SetDesaturated then texture:SetDesaturated(on) end
-        if on then texture:SetVertexColor(0.35, 1, 0.4) else texture:SetVertexColor(1, 1, 1) end
+        if on then texture:SetVertexColor(0.4, 0.7, 1) else texture:SetVertexColor(1, 1, 1) end
     end
     local function Apply(on)
         for _, region in ipairs({ frame:GetRegions() }) do
@@ -23,12 +24,12 @@ local function StyleAsPrimary(button)
         end
     end
     -- The tinted red art comes out dark, so a soft additive green layer on top
-    -- lifts it to a lighter green.
+    -- lifts it to a lighter blue.
     if not frame.ajLift then
         local lift = frame:CreateTexture(nil, "OVERLAY")
         lift:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -3)
         lift:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3)
-        lift:SetColorTexture(0.45, 1, 0.45, 0.30)
+        lift:SetColorTexture(0.45, 0.7, 1, 0.30)
         lift:SetBlendMode("ADD")
         frame.ajLift = lift
     end
