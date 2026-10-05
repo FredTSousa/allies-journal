@@ -385,7 +385,7 @@ function ReviewPrompt:BuildFrameInner()
     if inGroup then
         -- The tab row and border take about 40 pixels more than the plain form,
         -- so leave that out or the Skip / Save footer is pushed off the window.
-        local tabs = self:CreateGroupTabs(windowSettings.height - 150 - addon.windowExtra)
+        local tabs = self:CreateGroupTabs(windowSettings.height - 114 - addon.windowExtra)
         tabs:AddChild(frame)
         outer:AddChild(tabs)
     else
