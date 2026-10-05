@@ -1185,6 +1185,12 @@ function ReviewPrompt:CreateGroupTabs(height)
     end
 
     local tabs = AceGUI:Create("TabGroup")
+    -- A tab group normally resizes itself to fit its content; here the content
+    -- is stretched to fit the tab group, so the two keep re-sizing each other
+    -- and the layout never settles (the game stalls). A fixed height ends that.
+    -- (Widgets are pooled, so it is cleared again on release.)
+    tabs.noAutoHeight = true
+    tabs:SetCallback("OnRelease", function() tabs.noAutoHeight = nil end)
     tabs:SetLayout("Fill")
     tabs:SetFullWidth(true)
     tabs:SetHeight(height)
