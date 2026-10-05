@@ -317,7 +317,7 @@ function ReviewPrompt:ApplyWindowSize()
     outer:SetWidth(windowSettings.width)
     outer:SetHeight(windowSettings.height)
     if self.formScroll then
-        self.formScroll:SetHeight(windowSettings.height - 110)
+        self.formScroll:SetHeight(windowSettings.height - 110 - addon.windowExtra)
     end
     outer:DoLayout()
     if self.formScroll then self.formScroll:DoLayout() end
@@ -341,7 +341,7 @@ function ReviewPrompt:BuildFrameInner()
     local inGroup = self.group and not self.editingReviewID
 
     if not self.frame then
-        local frame = AceGUI:Create("Window")
+        local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
         -- List (not Fill): the form scrolls in the top part and a fixed
         -- footer (status line + Skip/Save) sits underneath it, so Save is
@@ -381,11 +381,11 @@ function ReviewPrompt:BuildFrameInner()
     local frame = AceGUI:Create("ScrollFrame")
     frame:SetLayout("List")
     frame:SetFullWidth(true)
-    frame:SetHeight(windowSettings.height - 110)
+    frame:SetHeight(windowSettings.height - 110 - addon.windowExtra)
     if inGroup then
         -- The tab row and border take about 40 pixels more than the plain form,
         -- so leave that out or the Skip / Save footer is pushed off the window.
-        local tabs = self:CreateGroupTabs(windowSettings.height - 150)
+        local tabs = self:CreateGroupTabs(windowSettings.height - 150 - addon.windowExtra)
         tabs:AddChild(frame)
         outer:AddChild(tabs)
     else

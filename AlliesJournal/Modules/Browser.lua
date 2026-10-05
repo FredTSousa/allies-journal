@@ -562,7 +562,7 @@ end
 
 function Browser:Show()
     if not self.frame then
-        local frame = AceGUI:Create("Window")
+        local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
         frame:SetTitle("Allies Journal")
         frame:SetLayout("Flow")
@@ -590,8 +590,8 @@ function Browser:Show()
         -- behind it (grass, a mob) changes how dark each card looks. A
         -- steady dark fill under the content makes it uniform.
         local fill = frame.frame:CreateTexture(nil, "BACKGROUND", nil, 2)
-        fill:SetPoint("TOPLEFT", frame.frame, "TOPLEFT", 8, -8)
-        fill:SetPoint("BOTTOMRIGHT", frame.frame, "BOTTOMRIGHT", -8, 8)
+        fill:SetPoint("TOPLEFT", frame.content, "TOPLEFT", -6, 6)
+        fill:SetPoint("BOTTOMRIGHT", frame.content, "BOTTOMRIGHT", 6, -6)
         self.windowFill = fill
         self.frame = frame
         self:ApplyColors(true)
@@ -613,7 +613,7 @@ end
 -- from the window's current height. 190 is everything else in the window
 -- (title, stats, buttons, filters, margins).
 function Browser:AreaHeights(hasSelection)
-    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 215, 200)
+    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 215 - addon.windowExtra, 200)
     if not hasSelection then return content, 0 end
     local list = math.floor(content * 0.40)
     return list, content - list

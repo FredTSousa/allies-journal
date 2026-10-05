@@ -20,6 +20,7 @@ Locales\enUS.lua
 
 Core\Init.lua
 Core\Database.lua
+Core\Window.lua
 
 Modules\ReviewCapture.lua
 Modules\ChatLog.lua

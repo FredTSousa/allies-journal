@@ -6,7 +6,7 @@ function Export:ShowExport()
     local text = addon:ExportData()
 
     if not self.exportFrame then
-        local frame = AceGUI:Create("Window")
+        local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
         frame:SetTitle("Allies Journal - Export")
         frame:SetLayout("Flow")
@@ -38,7 +38,7 @@ end
 
 function Export:ShowImport()
     if not self.importFrame then
-        local frame = AceGUI:Create("Window")
+        local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
         frame:SetTitle("Allies Journal - Import")
         frame:SetLayout("Flow")
@@ -83,7 +83,7 @@ end
 -- anyone to generate fresh test data each time.
 function Export:ShowCaptureReplay()
     if not self.replayFrame then
-        local frame = AceGUI:Create("Window")
+        local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
         frame:SetTitle("Allies Journal - Replay Captured Fights")
         frame:SetLayout("Flow")
@@ -119,7 +119,7 @@ end
 -- title/text instead of the review database.
 function Export:ShowText(title, text)
     if not self.textFrame then
-        local frame = AceGUI:Create("Window")
+        local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
         frame:SetLayout("Flow")
         frame:SetWidth(520)

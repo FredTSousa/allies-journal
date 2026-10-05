@@ -547,7 +547,7 @@ StaticPopupDialogs["ALLIESJOURNAL_RESET_SETTINGS"] = {
 
 function Options:Show()
     if not self.frame then
-        local frame = AceGUI:Create("Window")
+        local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
         frame:SetTitle("Allies Journal - Options")
         frame:SetLayout("Fill")
@@ -557,8 +557,8 @@ function Options:Show()
         frame:SetCallback("OnClose", function(widget) widget:Hide() end)
         -- Same steady dark fill as the /pr window (see Browser:Show).
         self.windowFill = frame.frame:CreateTexture(nil, "BACKGROUND", nil, 2)
-        self.windowFill:SetPoint("TOPLEFT", frame.frame, "TOPLEFT", 8, -8)
-        self.windowFill:SetPoint("BOTTOMRIGHT", frame.frame, "BOTTOMRIGHT", -8, 8)
+        self.windowFill:SetPoint("TOPLEFT", frame.content, "TOPLEFT", -6, 6)
+        self.windowFill:SetPoint("BOTTOMRIGHT", frame.content, "BOTTOMRIGHT", 6, -6)
         self.frame = frame
     end
     do

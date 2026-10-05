@@ -21,7 +21,7 @@ end
 local function OpenWindow(self, key, title, width, height)
     local frame = self[key]
     if not frame then
-        frame = AceGUI:Create("Window")
+        frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG")
         frame:SetTitle(title)
         frame:SetLayout("Fill")
