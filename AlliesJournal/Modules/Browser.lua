@@ -714,7 +714,7 @@ function Browser:Refresh()
     buttonRow:AddChild(whoBtn)
 
     local search = AceGUI:Create("EditBox")
-    search:SetLabel(L["Search"])
+    search:SetLabel("Search names and notes")
     search:SetText(self.searchText)
     search:SetWidth(140)
     search:SetCallback("OnTextChanged", function(widget, event, text)
@@ -1087,6 +1087,26 @@ function Browser:ShowHistory(nameRealm)
     title:SetText(ColoredShortName(nameRealm, allyData) .. "|cffffd100" .. realmPart .. "|r")
     title:SetFullWidth(true)
     detail:AddChild(title)
+
+    -- How much you've played together so far, from the recorded sessions.
+    local sessionList = addon:GetSessionsForPlayer(nameRealm)
+    if #sessionList > 0 then
+        local totalGrouped, first, last = 0, nil, nil
+        for _, recorded in ipairs(sessionList) do
+            totalGrouped = totalGrouped + (recorded.groupedSeconds or 0)
+            local when = recorded.date
+            if when then
+                first = first and math.min(first, when) or when
+                last = last and math.max(last, when) or when
+            end
+        end
+        local together = AceGUI:Create("Label")
+        together:SetFullWidth(true)
+        together:SetText(string.format("|cffffd100Together so far:|r %d session%s, %s grouped in total  %s(first %s, last %s)|r",
+            #sessionList, #sessionList == 1 and "" or "s", FormatDuration(totalGrouped), GRAY,
+            first and date("%Y-%m-%d", first) or "?", last and date("%Y-%m-%d", last) or "?"))
+        detail:AddChild(together)
+    end
 
 
     if allyData then

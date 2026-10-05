@@ -530,13 +530,35 @@ function addon:GetAllKnownPlayers()
     return list
 end
 
+-- Matches the name, the places you played together and everything you wrote
+-- in your notes. Several words all have to match (in any order, anywhere),
+-- so "funny healer" finds a note that says "funny" and one that says "healer".
 function addon:SearchPlayers(query)
-    query = query and query:lower() or ""
+    query = query and strtrim(query:lower()) or ""
+    local words = {}
+    for word in query:gmatch("%S+") do table.insert(words, word) end
+
     local list = {}
     for _, record in ipairs(self:GetAllKnownPlayers()) do
-        if query == "" or record.nameRealm:lower():find(query, 1, true) then
-            table.insert(list, record)
+        local matches = true
+        if #words > 0 then
+            local parts = { record.nameRealm:lower() }
+            local zone = record.lastSeen and record.lastSeen.zone
+            if zone then table.insert(parts, zone:lower()) end
+            for _, review in ipairs(self:GetReviewsForPlayer(record.nameRealm)) do
+                table.insert(parts, (review.socialNote or ""):lower())
+                table.insert(parts, (review.performanceNote or ""):lower())
+                table.insert(parts, (review.encounter or ""):lower())
+            end
+            local haystack = table.concat(parts, "\n")
+            for _, word in ipairs(words) do
+                if not haystack:find(word, 1, true) then
+                    matches = false
+                    break
+                end
+            end
         end
+        if matches then table.insert(list, record) end
     end
     return list
 end
