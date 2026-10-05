@@ -8,7 +8,7 @@ local AceGUI = LibStub("AceGUI-3.0")
 -- addon:CreateWindow(), which falls back to the stock Window if the template
 -- isn't there.
 
-local PLAYER_ICON = "Interface\\AddOns\\AlliesJournal\\Media\\icon"
+local PLAYER_ICON = "Interface\\AddOns\\AlliesJournal\\Media\\portrait"
 
 -- Space between the frame edge and the content area. TOP leaves room for the
 -- title bar and the portrait ring that hangs into the corner.
