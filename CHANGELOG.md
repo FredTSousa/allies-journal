@@ -4,7 +4,7 @@
 
 - A line in chat when someone you have a note on joins your group (how it went, how many sessions together, and your note). Not in raids.
 - A line in chat when someone you noted as Great comes online. Both reminders can be switched off in `/aj options`.
-- Whisper, Invite and Add Friend buttons under a player's name in `/aj`.
+- A right-click menu on a player's card in `/aj`: Whisper, Invite, Add Friend, Add Note and View history.
 - A journal-style icon for the minimap button and the addon list.
 - New option in `/aj options` (off by default): ask one question, "How was it?" (Great / Fine / Not for me), instead of Social and Performance, with one note box and one set of quick tags. Each note remembers how it was written, so switching never changes a note you already have, and editing a note opens it the way it was saved.
 

@@ -1013,8 +1013,8 @@ local function AddSeparator(container)
     container:AddChild(line)
 end
 
--- What you can do with someone from the journal. Used by the buttons under a
--- player's name and by the right-click menu on a card. Each only works if
+-- What you can do with someone from the journal, offered in the right-click
+-- menu on a card. Each only works if
 -- the game lets an addon do it from a click, so a failure is reported
 -- rather than ignored.
 function Browser:PlayerActions(nameRealm)
@@ -1035,7 +1035,7 @@ function Browser:PlayerActions(nameRealm)
               C_FriendList.AddFriend(shortName)
               addon:Print("Sent a friend request to " .. shortName .. ".")
           end) },
-        { text = "Add Note", menuOnly = true, tip = "Write a new note on " .. shortName .. ".",
+        { text = "Add Note", tip = "Write a new note on " .. shortName .. ".",
           run = Safe(function()
               if not addon:GetModule("RosterTracker"):QueueDeparted(nameRealm) then
                   addon:DoQueueNameForReview(nameRealm)
@@ -1088,28 +1088,6 @@ function Browser:ShowHistory(nameRealm)
     title:SetFullWidth(true)
     detail:AddChild(title)
 
-    -- Quick actions, so someone you look up here can be reached without
-    -- leaving the journal. Each only works if the game lets an addon do it
-    -- from a click, so failures are reported instead of ignored.
-    local actions = AceGUI:Create("SimpleGroup")
-    actions:SetFullWidth(true)
-    actions:SetLayout("Flow")
-    for _, action in ipairs(self:PlayerActions(nameRealm)) do
-        if not action.menuOnly then
-            local btn = AceGUI:Create("Button")
-            btn:SetText(action.text)
-            btn:SetWidth(120)
-            btn:SetCallback("OnClick", action.run)
-            btn:SetCallback("OnEnter", function(widget)
-                GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
-                GameTooltip:SetText(action.tip, 1, 1, 1, 1, true)
-                GameTooltip:Show()
-            end)
-            btn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
-            actions:AddChild(btn)
-        end
-    end
-    detail:AddChild(actions)
 
     if allyData then
         local info = AceGUI:Create("Label")
