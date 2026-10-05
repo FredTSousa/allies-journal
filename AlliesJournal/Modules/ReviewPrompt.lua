@@ -19,6 +19,21 @@ local function StyleAsPrimary(button)
     end)
 end
 
+-- Optional shortcuts (the quick-note chips) shouldn't weigh as much as the
+-- real buttons: a little shorter, with a slightly smaller label. Restored on
+-- release since buttons are pooled.
+local function StyleAsSmall(button)
+    local text = button.text
+    local path, size, flags
+    if text and text.GetFont then path, size, flags = text:GetFont() end
+    if path and size then text:SetFont(path, size - 1, flags) end
+    button:SetHeight(18)
+    button:SetCallback("OnRelease", function()
+        if path and size then text:SetFont(path, size, flags) end
+        button:SetHeight(24)
+    end)
+end
+
 local RATING_ORDER = { "good", "average", "bad" }
 local ROLE_ORDER = { "tank", "healer", "dps" }
 local ROLE_LABELS = { tank = "Tank", healer = "Healer", dps = "DPS" }
@@ -601,7 +616,7 @@ function ReviewPrompt:FillChips(key)
             local btn = AceGUI:Create("Button")
             btn:SetText(tag)
             btn:SetAutoWidth(true)
-            btn:SetHeight(20)
+            StyleAsSmall(btn)
             btn:SetCallback("OnClick", function() self:AddTag(key, tag) end)
             row:AddChild(btn)
         end
@@ -629,7 +644,7 @@ end
 -- (optional for Average, required otherwise - see RefreshRequirements) so an
 -- Average rating can still carry context.
 function ReviewPrompt:AddRatingSection(frame, key, label)
-    local heading = AceGUI:Create("Label")
+    local heading = AceGUI:Create("Heading")
     heading:SetFullWidth(true)
     heading:SetText(label)
     frame:AddChild(heading)
@@ -733,11 +748,6 @@ function ReviewPrompt:AddFightSelectionSection(frame, data)
     local fights = data.fights
     if not fights or #fights == 0 then return end
 
-    local heading = AceGUI:Create("Label")
-    heading:SetFullWidth(true)
-    heading:SetText("Fights (uncheck any that shouldn't count):")
-    frame:AddChild(heading)
-
     local preview = AceGUI:Create("Label")
     preview:SetFullWidth(true)
     frame:AddChild(preview)
@@ -756,7 +766,7 @@ function ReviewPrompt:AddFightSelectionSection(frame, data)
     -- re-flows to match.
     local chartHeading = AceGUI:Create("Label")
     chartHeading:SetFullWidth(true)
-    chartHeading:SetText("Group DPS (selected fights) - highlighted background is who you're writing about:")
+    chartHeading:SetText("Group DPS (your bar is highlighted):")
     frame:AddChild(chartHeading)
 
     local chartContainer = AceGUI:Create("SimpleGroup")
@@ -1158,7 +1168,7 @@ function ReviewPrompt:AddChatLogSection(frame, data)
     local box = AceGUI:Create("MultiLineEditBox")
     box:SetLabel("")
     box:SetFullWidth(true)
-    box:SetNumLines(6)
+    box:SetNumLines(4)
     box:SetText(table.concat(lines, "\n"))
     box:SetDisabled(true)
     frame:AddChild(box)
