@@ -287,6 +287,14 @@ function ReviewPrompt:ApplyWindowSize()
 end
 
 function ReviewPrompt:BuildFrame()
+    local started = debugprofilestop()
+    self:BuildFrameInner()
+    if addon.db.global.settings.developerTools then
+        addon:Print(string.format("[note window] built in %.0f ms", debugprofilestop() - started))
+    end
+end
+
+function ReviewPrompt:BuildFrameInner()
     local data = self.current
 
     if not self.frame then
