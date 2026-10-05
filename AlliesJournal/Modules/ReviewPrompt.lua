@@ -1472,9 +1472,9 @@ end
 -- saved variables when the game logs out or reloads, and picked up again a few
 -- seconds after the next login, so a /reload doesn't throw them away. Kept
 -- outside `global` (in AlliesJournalDB.pendingNotes) so it never ends up in an
--- export, and only for a while: after 48 hours it is dropped.
+-- export, and only for a while: after 24 hours it is dropped.
 
-local PENDING_MAX_AGE = 48 * 3600
+local PENDING_MAX_AGE = 24 * 3600
 
 function ReviewPrompt:OnEnable()
     self:RegisterEvent("PLAYER_LOGOUT", "SavePending")
