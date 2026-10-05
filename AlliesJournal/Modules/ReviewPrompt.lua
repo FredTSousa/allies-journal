@@ -13,7 +13,7 @@ local function StyleAsPrimary(button)
     local function Tint(texture, on)
         if not texture or not texture.SetVertexColor then return end
         if texture.SetDesaturated then texture:SetDesaturated(on) end
-        if on then texture:SetVertexColor(0.5, 0.75, 1) else texture:SetVertexColor(1, 1, 1) end
+        if on then texture:SetVertexColor(0.05, 0.45, 1) else texture:SetVertexColor(1, 1, 1) end
     end
     local function Apply(on)
         for _, region in ipairs({ frame:GetRegions() }) do
@@ -29,7 +29,7 @@ local function StyleAsPrimary(button)
         local lift = frame:CreateTexture(nil, "OVERLAY")
         lift:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -3)
         lift:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3)
-        lift:SetColorTexture(0.15, 0.5, 1, 0.65)
+        lift:SetColorTexture(0.0, 0.42, 1, 0.55)
         lift:SetBlendMode("ADD")
         frame.ajLift = lift
     end
