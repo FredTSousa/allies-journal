@@ -956,7 +956,7 @@ function AlliesJournal:DoQueueNameForReview(nameRealm)
             encounter = "Manual",
             role = nil,
         },
-    })
+    }, true)
 end
 
 -- The real gate defaults to 10 minutes grouped-together before a leave/kick

@@ -404,7 +404,7 @@ function RosterTracker:QueueDeparted(nameRealm)
             fights = snap.fights,
             since = snap.since,
         },
-    })
+    }, true)
     return true
 end
 

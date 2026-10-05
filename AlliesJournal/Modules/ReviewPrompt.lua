@@ -44,11 +44,13 @@ ReviewPrompt.batchTotal = 0
 ReviewPrompt.shownCount = 0
 
 -- data: { nameRealm, encounter, role, guid, fights }
-function ReviewPrompt:QueueBatch(list)
+-- asked: the person chose to write this note (right-click menu, /aj), as
+-- opposed to the end-of-run prompt, so it is shown right away.
+function ReviewPrompt:QueueBatch(list, asked)
     -- Someone is already writing (or has put off) a group's notes: add these
     -- people to the same window instead of making a second queue.
     if self.group and not self.editingReviewID then
-        self:AddToGroup(list)
+        self:AddToGroup(list, asked)
         return
     end
 
@@ -328,6 +330,22 @@ local function SaveLabel(text)
     return text
 end
 
+-- The chart's bars are raw frames parented to a chart container that AceGUI
+-- pools. When the next form has no chart (a person with no fights), nothing
+-- hides them, and the pooled container gets reused somewhere else - the old
+-- bars then draw over it (behind the Save row, for one). Hidden before every
+-- rebuild; the chart shows what it needs again when it is built.
+function ReviewPrompt:HideChartRows()
+    for _, row in ipairs(self.chartBarRows or {}) do
+        row.roleIcon:Hide()
+        row.nameText:Hide()
+        row.bg:Hide()
+        row.bar:Hide()
+        row.dpsText:Hide()
+        row.outline:Hide()
+    end
+end
+
 function ReviewPrompt:BuildFrame()
     local started = debugprofilestop()
     self:BuildFrameInner()
@@ -368,6 +386,7 @@ function ReviewPrompt:BuildFrameInner()
     local windowSettings = addon.db.global.settings.reviewWindow
     outer:SetWidth(windowSettings.width)
     outer:SetHeight(windowSettings.height)
+    self:HideChartRows()
     outer:ReleaseChildren()
     outer:SetTitle(self.editingReviewID
         and ("Edit Note: " .. addon:GetShortName(data.nameRealm))
@@ -1364,9 +1383,23 @@ function ReviewPrompt:GroupDrop()
 end
 
 -- New people arriving while a group is open or put off join it.
-function ReviewPrompt:AddToGroup(list)
+function ReviewPrompt:AddToGroup(list, asked)
+    local first = #self.group + 1
     for _, data in ipairs(list) do
         table.insert(self.group, NewMember(data))
+    end
+    if asked then
+        local wasHidden = self.groupHidden
+        self.groupHidden = false
+        self:ShowMember(first)
+        if wasHidden then
+            pcall(function()
+                self.frame.frame:SetAlpha(0)
+                UIFrameFadeIn(self.frame.frame, 0.25, 0, 1)
+            end)
+        end
+        self:UpdateReminders()
+        return
     end
     if self.groupHidden then
         local waiting = self:PendingCount()
