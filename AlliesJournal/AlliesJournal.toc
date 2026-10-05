@@ -5,7 +5,7 @@
 ## Author: FredTSousa
 ## Version: @project-version@
 ## Category: Social
-## IconTexture: Interface\COMMON\FavoritesIcon
+## IconTexture: Interface\AddOns\AlliesJournal\Media\icon
 ## SavedVariables: AlliesJournalDB, PRTrackerAccountDB
 ## SavedVariablesPerCharacter: PRTrackerDB
 ## DefaultState: Enabled

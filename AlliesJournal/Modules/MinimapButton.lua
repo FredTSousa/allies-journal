@@ -7,7 +7,7 @@ local MinimapButton = addon:NewModule("MinimapButton")
 -- (`minimapPos` is its angle in degrees; `angle` is what an older
 -- hand-made button saved and is carried over once).
 local NAME = "AlliesJournal"
-local ICON = "Interface\\COMMON\\FavoritesIcon"
+local ICON = "Interface\\AddOns\\AlliesJournal\\Media\\icon"
 
 function MinimapButton:OnEnable()
     local LDB = LibStub("LibDataBroker-1.1", true)
