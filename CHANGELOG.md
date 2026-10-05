@@ -7,6 +7,7 @@
 - Save is now the main button in the note window (bigger, fills the rest of the button row; Later and Skip are smaller).
 - The note form is tidier: Social and Performance have section headings, quick-note chips are smaller, and the fight and chat text is shorter.
 - The windows use the game's own modern frame (like the Professions window), with the journal icon in the corner.
+- The chat lines about waiting notes have a clickable "[Write them now]" link.
 - A line in chat when someone you have a note on joins your group (how it went, how many sessions together, and your note). Not in raids.
 - At the end of a dungeon, a line in chat listing who in the group you already have a note on ("Familiar faces this run"). Not in raids.
 - `/aj runs`: a diary of your recorded runs, newest first, with who was there and a note you can write about each run. It is built from the sessions you already have, so your past runs show up too and nothing extra is stored apart from the notes you type.

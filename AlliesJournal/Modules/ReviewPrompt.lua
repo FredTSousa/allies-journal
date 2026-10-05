@@ -1342,6 +1342,18 @@ end
 
 local REMINDER_SECONDS = 60
 
+-- A clickable "[Write them]" for chat lines. Clicking it comes back through
+-- SetItemRef (the game's handler for every chat link) as "addon:AlliesJournal:notes".
+local NOTES_LINK = "|cff40ff40|Haddon:AlliesJournal:notes|h[Write them now]|h|r"
+
+hooksecurefunc("SetItemRef", function(link)
+    if type(link) ~= "string" then return end
+    local kind, name, action = strsplit(":", link)
+    if kind == "addon" and name == "AlliesJournal" and action == "notes" then
+        addon:GetModule("ReviewPrompt"):GroupReopen()
+    end
+end)
+
 function ReviewPrompt:PendingCount()
     local count = 0
     for _, member in ipairs(self.group or {}) do
@@ -1360,8 +1372,8 @@ function ReviewPrompt:GroupLater()
     if self.frame then self.frame:Hide() end
     self.groupHidden = true
     local waiting = self:PendingCount()
-    addon:Print(string.format("Saved for later: %d note%s to write. Left-click the minimap button or type /aj notes when you're ready.",
-        waiting, waiting == 1 and "" or "s"))
+    addon:Print(string.format("Saved for later: %d note%s to write. %s (or left-click the minimap button, or type /aj notes).",
+        waiting, waiting == 1 and "" or "s", NOTES_LINK))
     self:UpdateReminders()
 end
 
@@ -1415,8 +1427,8 @@ function ReviewPrompt:AddToGroup(list, asked)
     end
     if self.groupHidden then
         local waiting = self:PendingCount()
-        addon:Print(string.format("%d more note%s added to the ones waiting (%d in all).",
-            #list, #list == 1 and "" or "s", waiting))
+        addon:Print(string.format("%d more note%s added to the ones waiting (%d in all). %s",
+            #list, #list == 1 and "" or "s", waiting, NOTES_LINK))
         self:UpdateReminders()
     elseif self.frame and self.frame:IsShown() then
         -- Rebuilt a moment later so the new tabs appear.
@@ -1436,8 +1448,8 @@ function ReviewPrompt:Remind()
     for i = 1, math.min(#names, 4) do shown[i] = names[i] end
     local text = table.concat(shown, ", ")
     if #names > 4 then text = text .. string.format(" and %d more", #names - 4) end
-    addon:Print(string.format("You still have %d note%s to write: %s. Left-click the minimap button or type /aj notes.",
-        #names, #names == 1 and "" or "s", text))
+    addon:Print(string.format("You still have %d note%s to write: %s. %s",
+        #names, #names == 1 and "" or "s", text, NOTES_LINK))
 end
 
 -- Starts or stops the minute-by-minute reminder and the minimap tint to match
