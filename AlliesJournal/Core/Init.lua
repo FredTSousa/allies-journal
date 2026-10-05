@@ -85,6 +85,7 @@ function AlliesJournal:OnInitialize()
     AlliesJournal.MergeLegacyCharacterData(g)
     g.players = g.players or {}    -- [nameRealm] = playerRecord
     g.reviews = g.reviews or {}    -- [reviewId]  = review
+    g.runNotes = g.runNotes or {}  -- [runId] = your note about a whole run (see GetRuns)
     g.sessions = g.sessions or {}  -- [sessionId] = session (see RosterTracker's session-eligibility gate)
     g.settings = g.settings or { gateMinutes = 10 }  -- minutes grouped together before a review can queue
     -- Session history thresholds: a session only gets recorded when BOTH
@@ -417,6 +418,10 @@ function AlliesJournal:SlashCommand(input)
         self:GetModule("ReviewCapture"):DumpState()
     elseif cmd == "recentallies" then
         self:DumpRecentAllies()
+    elseif cmd == "runs" then
+        self:GetModule("Diary"):ShowRuns()
+    elseif cmd == "numbers" then
+        self:GetModule("Diary"):ShowNumbers()
     elseif cmd == "minimap" then
         local mm = self.db.global.settings.minimap
         mm.hide = not mm.hide
@@ -442,6 +447,8 @@ function AlliesJournal:SlashCommand(input)
         self:Print("  /aj lfgoffset [x y] - show or set the Group Finder tooltip's x/y offset live")
         self:Print("  /aj options (or /aj config) - open the settings window")
         self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/notes) without opening the browser")
+        self:Print("  /aj runs - your recorded runs, with who was there and a note for each")
+        self:Print("  /aj numbers - your journal in numbers")
         self:Print("  /aj minimap - show or hide the minimap button")
         self:Print("  /aj pinjournal - pin every player with a note who isn't pinned in Recent Allies yet (skips anyone marked 'Not for me' or 'Struggled' unless that's turned on in /aj options)")
         self:Print("  /aj resyncrecentallies - re-applies the pin/note to every journaled player's C_RecentAllies entry using their latest note, for notes saved before the name-based GUID fallback existed")

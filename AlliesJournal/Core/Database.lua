@@ -449,6 +449,56 @@ function addon:GetRecentAllyInteractionsInWindow(guid, sinceTime)
     return inWindow
 end
 
+-- Your recorded outings, newest first. A "run" is the sessions of everyone
+-- you grouped with at the same time in the same place (their dates are the
+-- same moment, give or take a few seconds), so the past is covered too
+-- without anything new being stored. Notes about a run are kept apart under
+-- its id (the time of its first session).
+function addon:GetRuns()
+    local g = self.db.global
+    local owner = {}
+    for nameRealm, record in pairs(g.players) do
+        for _, sessionId in ipairs(record.sessions or {}) do owner[sessionId] = nameRealm end
+    end
+
+    local items = {}
+    for sessionId, session in pairs(g.sessions) do
+        if session.date and owner[sessionId] then
+            table.insert(items, { session = session, nameRealm = owner[sessionId] })
+        end
+    end
+    table.sort(items, function(a, b) return a.session.date < b.session.date end)
+
+    local runs, current = {}, nil
+    for _, item in ipairs(items) do
+        local s = item.session
+        local zone = s.zone or "Unknown"
+        if not (current and s.date - current.lastDate <= 120 and zone == current.zone) then
+            current = {
+                id = "run" .. s.date, date = s.date, zone = zone, lastDate = s.date,
+                members = {}, groupedSeconds = 0, combatSeconds = 0,
+            }
+            table.insert(runs, current)
+        end
+        current.lastDate = s.date
+        table.insert(current.members, item.nameRealm)
+        current.groupedSeconds = math.max(current.groupedSeconds, s.groupedSeconds or 0)
+        current.combatSeconds = math.max(current.combatSeconds, s.combatSeconds or 0)
+    end
+
+    local notes = g.runNotes or {}
+    for _, run in ipairs(runs) do run.note = notes[run.id] or "" end
+    table.sort(runs, function(a, b) return a.date > b.date end)
+    return runs
+end
+
+function addon:SetRunNote(runId, text)
+    local g = self.db.global
+    g.runNotes = g.runNotes or {}
+    text = strtrim(text or "")
+    g.runNotes[runId] = text ~= "" and text or nil
+end
+
 function addon:DeleteReview(nameRealm, id)
     self.db.global.reviews[id] = nil
 

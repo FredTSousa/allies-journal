@@ -31,5 +31,6 @@ Modules\LFGAnnotate.lua
 Modules\Export.lua
 Modules\WhoCheck.lua
 Modules\Notices.lua
+Modules\Diary.lua
 Modules\Options.lua
 Modules\MinimapButton.lua

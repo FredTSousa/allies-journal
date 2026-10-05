@@ -613,7 +613,7 @@ end
 -- from the window's current height. 190 is everything else in the window
 -- (title, stats, buttons, filters, margins).
 function Browser:AreaHeights(hasSelection)
-    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 190, 200)
+    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 215, 200)
     if not hasSelection then return content, 0 end
     local list = math.floor(content * 0.40)
     return list, content - list
@@ -712,6 +712,24 @@ function Browser:Refresh()
     end)
     whoBtn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
     buttonRow:AddChild(whoBtn)
+
+    -- A second row for the two views of your history that sit beside the list.
+    local viewRow = AceGUI:Create("SimpleGroup")
+    viewRow:SetFullWidth(true)
+    viewRow:SetLayout("Flow")
+    frame:AddChild(viewRow)
+
+    local runsBtn = AceGUI:Create("Button")
+    runsBtn:SetText("Runs")
+    runsBtn:SetWidth(120)
+    runsBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowRuns() end)
+    viewRow:AddChild(runsBtn)
+
+    local numbersBtn = AceGUI:Create("Button")
+    numbersBtn:SetText("In numbers")
+    numbersBtn:SetWidth(120)
+    numbersBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowNumbers() end)
+    viewRow:AddChild(numbersBtn)
 
     local search = AceGUI:Create("EditBox")
     search:SetLabel("Search names and notes")
