@@ -660,7 +660,7 @@ function AlliesJournal:QueueTestReview()
             role = "tank",
             fights = { { duration = 60, dps = 123456, hps = 0 } },
         },
-    })
+    }, true)
 end
 
 -- Same purpose as QueueTestReview (exercise the UI with no group/target
@@ -796,7 +796,7 @@ function AlliesJournal:QueueTestGroupReview()
             guid = reviewedGuid,
             fights = fights,
         },
-    })
+    }, true)
 end
 
 -- Loads a previously /pr capturesave'd fight-data blob and queues a
@@ -831,7 +831,7 @@ function AlliesJournal:ReplayCapturedFights(text)
             role = data.role,
             fights = data.fights,
         },
-    })
+    }, true)
 end
 
 -- Force-queues a review for a real unit (party/raid member, target,
@@ -859,7 +859,7 @@ function AlliesJournal:QueueUnitForReview(unit)
             fights = guid and capture:GetFights(guid) or {},
             guid = guid,
         },
-    })
+    }, true)
 end
 
 -- Queues a review from a plain name string rather than a unit - for players
