@@ -77,10 +77,14 @@ function MinimapButton:SetAttention(on)
     end
     pcall(function()
         if on then
-            UIFrameFlash(button, 0.6, 0.6, -1, false, 0.4, 0.4)
+            -- showWhenDone (5th argument): without it, stopping the flash
+            -- hides the button.
+            UIFrameFlash(button, 0.6, 0.6, -1, true, 0.4, 0.4)
         else
             UIFrameFlashStop(button)
             button:SetAlpha(1)
+            -- Belt and braces: the flash helper hides frames it was told not to show when done.
+            if not addon.db.global.settings.minimap.hide then button:Show() end
         end
     end)
 end
