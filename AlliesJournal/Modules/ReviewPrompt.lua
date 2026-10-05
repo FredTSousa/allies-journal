@@ -3,6 +3,90 @@ local ReviewPrompt = addon:NewModule("ReviewPrompt")
 local AceGUI = LibStub("AceGUI-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
+-- A main-action button, drawn here instead of using AceGUI's stock Button (one
+-- fixed Blizzard style that can only be told apart by its text): a taller
+-- green button with a gold frame, a lighter top edge and a hover glow.
+-- Offers what ReviewPrompt uses of a Button: SetText, SetDisabled, `disabled`,
+-- SetWidth/SetHeight and the OnClick callback.
+do
+    local Type, Version = "AJPrimaryButton", 1
+
+    local COLORS = {
+        enabled = { bg = { 0.10, 0.42, 0.14 }, border = { 1, 0.82, 0.1 }, text = { 1, 1, 1 } },
+        disabled = { bg = { 0.17, 0.17, 0.17 }, border = { 0.4, 0.4, 0.4 }, text = { 0.55, 0.55, 0.55 } },
+    }
+
+    local methods = {
+        OnAcquire = function(self)
+            self:SetWidth(200)
+            self:SetHeight(34)
+            self:SetDisabled(false)
+        end,
+
+        SetText = function(self, text)
+            self.label:SetText(text or "")
+        end,
+
+        SetDisabled = function(self, disabled)
+            self.disabled = disabled and true or false
+            local c = self.disabled and COLORS.disabled or COLORS.enabled
+            self.bg:SetColorTexture(c.bg[1], c.bg[2], c.bg[3], 1)
+            self.shine:SetColorTexture(1, 1, 1, self.disabled and 0.03 or 0.12)
+            for _, strip in ipairs(self.border) do
+                strip:SetColorTexture(c.border[1], c.border[2], c.border[3], 1)
+            end
+            self.label:SetTextColor(c.text[1], c.text[2], c.text[3])
+            self.hover:SetAlpha(self.disabled and 0 or 1)
+        end,
+    }
+
+    local function Constructor()
+        local frame = CreateFrame("Button", nil, UIParent)
+        frame:Hide()
+
+        local bg = frame:CreateTexture(nil, "BACKGROUND")
+        bg:SetAllPoints(frame)
+
+        -- lighter top half
+        local shine = frame:CreateTexture(nil, "BORDER")
+        shine:SetPoint("TOPLEFT", frame, "TOPLEFT", 2, -2)
+        shine:SetPoint("TOPRIGHT", frame, "TOPRIGHT", -2, -2)
+        shine:SetHeight(14)
+
+        local function Strip() return frame:CreateTexture(nil, "ARTWORK") end
+        local top, bottom, left, right = Strip(), Strip(), Strip(), Strip()
+        top:SetPoint("TOPLEFT"); top:SetPoint("TOPRIGHT"); top:SetHeight(2)
+        bottom:SetPoint("BOTTOMLEFT"); bottom:SetPoint("BOTTOMRIGHT"); bottom:SetHeight(2)
+        left:SetPoint("TOPLEFT"); left:SetPoint("BOTTOMLEFT"); left:SetWidth(2)
+        right:SetPoint("TOPRIGHT"); right:SetPoint("BOTTOMRIGHT"); right:SetWidth(2)
+
+        local hover = frame:CreateTexture(nil, "HIGHLIGHT")
+        hover:SetAllPoints(frame)
+        hover:SetColorTexture(1, 1, 1, 0.18)
+        hover:SetBlendMode("ADD")
+
+        local label = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+        label:SetPoint("CENTER", frame, "CENTER", 0, 0)
+
+        local widget = {
+            frame = frame, type = Type, bg = bg, shine = shine, hover = hover, label = label,
+            border = { top, bottom, left, right },
+        }
+        for name, func in pairs(methods) do widget[name] = func end
+
+        frame:SetScript("OnClick", function()
+            if not widget.disabled then widget:Fire("OnClick") end
+            AceGUI:ClearFocus()
+        end)
+        frame:SetScript("OnMouseDown", function() label:SetPoint("CENTER", frame, "CENTER", 0, -1) end)
+        frame:SetScript("OnMouseUp", function() label:SetPoint("CENTER", frame, "CENTER", 0, 0) end)
+
+        return AceGUI:RegisterAsWidget(widget)
+    end
+
+    AceGUI:RegisterWidgetType(Type, Constructor, Version)
+end
+
 local RATING_ORDER = { "good", "average", "bad" }
 local ROLE_ORDER = { "tank", "healer", "dps" }
 local ROLE_LABELS = { tank = "Tank", healer = "Healer", dps = "DPS" }
@@ -294,7 +378,7 @@ end
 
 -- Green text for the Save button so it reads as the main action.
 local function SaveLabel(text)
-    return "|cff40ff40" .. text .. "|r"
+    return text
 end
 
 function ReviewPrompt:BuildFrame()
@@ -449,11 +533,9 @@ function ReviewPrompt:BuildFrameInner()
 
     -- Reads "Save as Fine/Solid" while nothing has been touched (see
     -- RefreshRequirements) - the one-click path for an unremarkable run.
-    local saveBtn = AceGUI:Create("Button")
+    local saveBtn = AceGUI:Create("AJPrimaryButton")
     saveBtn:SetText(SaveLabel(L["Save"]))
-    saveBtn:SetWidth(230)
-    -- The main action: bigger text in green, where Later and Skip stay plain.
-    pcall(function() saveBtn.text:SetFontObject(GameFontHighlightLarge) end)
+    saveBtn:SetWidth(230)  -- the main action; Later and Skip stay stock buttons
     saveBtn:SetCallback("OnClick", function() self:Save() end)
     buttonRow:AddChild(saveBtn)
     self.saveBtn = saveBtn
