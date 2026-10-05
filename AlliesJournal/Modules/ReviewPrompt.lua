@@ -463,14 +463,9 @@ function ReviewPrompt:BuildFrameInner()
     skipBtn:SetCallback("OnClick", function() self:Skip() end)
     buttonRow:AddChild(skipBtn)
 
-    -- Pushes Save to the right edge of the window: an invisible label as
-    -- wide as the space left after the buttons on each side.
+    -- Save takes all the room left in the row after the buttons on its left.
     local leftWidth = (inGroup and 70 or 0) + 70
-    local saveWidth = 250
-    local spacer = AceGUI:Create("Label")
-    spacer:SetText(" ")
-    spacer:SetWidth(math.max(1, windowSettings.width - 32 - leftWidth - saveWidth - 12))
-    buttonRow:AddChild(spacer)
+    local saveWidth = math.max(150, windowSettings.width - 32 - leftWidth - 12)
 
     -- Reads "Save as Fine/Solid" while nothing has been touched (see
     -- RefreshRequirements) - the one-click path for an unremarkable run.
