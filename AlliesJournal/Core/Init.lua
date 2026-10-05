@@ -161,8 +161,14 @@ function AlliesJournal:OnInitialize()
     -- a note. Notes remember the mode they were written in, so flipping this
     -- never changes an existing note.
     if g.settings.simpleNotes == nil then g.settings.simpleNotes = false end
-    -- Experimental (developer option): a group at the end of a run shares one window with a strip of names.
-    if g.settings.playerStrip == nil then g.settings.playerStrip = false end
+    -- A group at the end of a run shares one window with a tab per person. It
+    -- started as an off-by-default experiment, so everyone is moved onto the
+    -- new default once.
+    if g.settings.playerStripVersion ~= 1 then
+        g.settings.playerStrip = true
+        g.settings.playerStripVersion = 1
+    end
+    if g.settings.playerStrip == nil then g.settings.playerStrip = true end
     -- Small chat reminders: someone you have a note on joins your group, and
     -- someone you noted as Great comes online.
     g.settings.notices = g.settings.notices or {}
@@ -423,6 +429,9 @@ function AlliesJournal:SlashCommand(input)
         self:GetModule("ReviewCapture"):DumpState()
     elseif cmd == "recentallies" then
         self:DumpRecentAllies()
+    elseif cmd == "notes" then
+        local plan = self:GetModule("ReviewPrompt")
+        if rest:lower() == "skip" then plan:GroupDrop() else plan:GroupReopen() end
     elseif cmd == "runs" then
         self:GetModule("Diary"):ShowRuns()
     elseif cmd == "numbers" then
@@ -452,6 +461,7 @@ function AlliesJournal:SlashCommand(input)
         self:Print("  /aj lfgoffset [x y] - show or set the Group Finder tooltip's x/y offset live")
         self:Print("  /aj options (or /aj config) - open the settings window")
         self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/notes) without opening the browser")
+        self:Print("  /aj notes - open the notes you put off with Later (\"/aj notes skip\" drops them)")
         self:Print("  /aj runs - your recorded runs, with who was there and a note for each")
         self:Print("  /aj numbers - your journal in numbers")
         self:Print("  /aj minimap - show or hide the minimap button")
@@ -463,7 +473,7 @@ function AlliesJournal:SlashCommand(input)
             self:Print("  /aj import - paste back a previous /aj export; merges in, never overwrites existing data")
             self:Print("  /aj test - queue a fake note window, no group needed (tests the UI only)")
             self:Print("  /aj testgroup - like /aj test but with 3 fake fights and 4 fake group members, to test the fight checklist and DPS bar chart without needing anyone else")
-            self:Print("  /aj testbatch - queue three fake players at once, to try the group window (developer experiment)")
+            self:Print("  /aj testbatch - queue three fake players at once, to try the group window (developer test)")
             self:Print("  /aj capturesave [unit] - save real captured fight data for a unit (default: target) as copyable text, to replay later via /aj capturereplay")
             self:Print("  /aj capturereplay - paste back a previous /aj capturesave and open a note window using that exact real data, for repeated UI testing")
             self:Print("  /pr menudebug - toggle printing every right-click menu tag seen, to debug the context menu button")

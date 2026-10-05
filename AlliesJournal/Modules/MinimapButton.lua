@@ -24,13 +24,23 @@ function MinimapButton:OnEnable()
         OnClick = function(_, mouseButton)
             if mouseButton == "RightButton" then
                 addon:GetModule("Options"):Show()
+            elseif addon:GetModule("ReviewPrompt"):HasWaiting() and not IsShiftKeyDown() then
+                -- Notes put off with "Later" come first; Shift opens the journal.
+                addon:GetModule("ReviewPrompt"):GroupReopen()
             else
                 addon:GetModule("Browser"):Toggle()
             end
         end,
         OnTooltipShow = function(tooltip)
             tooltip:AddLine("Allies Journal")
-            tooltip:AddLine("Left-click: open notes", 1, 1, 1)
+            if addon:GetModule("ReviewPrompt"):HasWaiting() then
+                local waiting = addon:GetModule("ReviewPrompt"):PendingCount()
+                tooltip:AddLine(string.format("You have %d note%s to write", waiting, waiting == 1 and "" or "s"), 0.4, 1, 0.4)
+                tooltip:AddLine("Left-click: write them", 1, 1, 1)
+                tooltip:AddLine("Shift-left-click: open your journal", 1, 1, 1)
+            else
+                tooltip:AddLine("Left-click: open notes", 1, 1, 1)
+            end
             tooltip:AddLine("Right-click: options", 1, 1, 1)
             tooltip:AddLine("Drag: move this button", 0.6, 0.6, 0.6)
         end,
@@ -54,4 +64,23 @@ function MinimapButton:Refresh()
     else
         DBIcon:Show(NAME)
     end
+end
+
+-- Tints (and softly flashes) the button while notes are waiting.
+function MinimapButton:SetAttention(on)
+    local DBIcon = self.DBIcon
+    if not DBIcon then return end
+    local button = DBIcon:GetMinimapButton(NAME)
+    if not button then return end
+    if button.icon then
+        if on then button.icon:SetVertexColor(0.4, 1, 0.4) else button.icon:SetVertexColor(1, 1, 1) end
+    end
+    pcall(function()
+        if on then
+            UIFrameFlash(button, 0.6, 0.6, -1, false, 0.4, 0.4)
+        else
+            UIFrameFlashStop(button)
+            button:SetAlpha(1)
+        end
+    end)
 end

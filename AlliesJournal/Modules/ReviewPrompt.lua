@@ -14,8 +14,14 @@ ReviewPrompt.shownCount = 0
 
 -- data: { nameRealm, encounter, role, guid, fights }
 function ReviewPrompt:QueueBatch(list)
-    -- Experimental (developer option): a whole group shares one window, with
-    -- a strip of names to move between people.
+    -- Someone is already writing (or has put off) a group's notes: add these
+    -- people to the same window instead of making a second queue.
+    if self.group and not self.editingReviewID then
+        self:AddToGroup(list)
+        return
+    end
+
+    -- A whole group shares one window, with a tab per person.
     if addon.db.global.settings.playerStrip and #list >= 2 and not self.active then
         self:StartGroup(list)
         return
@@ -73,7 +79,7 @@ function ReviewPrompt:ShowNext()
 end
 
 function ReviewPrompt:Skip()
-    if self.group then
+    if self.group and not self.editingReviewID then
         self:GroupAdvance("skipped")
         return
     end
@@ -286,6 +292,11 @@ function ReviewPrompt:ApplyWindowSize()
     if self.formScroll then self.formScroll:DoLayout() end
 end
 
+-- Green text for the Save button so it reads as the main action.
+local function SaveLabel(text)
+    return "|cff40ff40" .. text .. "|r"
+end
+
 function ReviewPrompt:BuildFrame()
     local started = debugprofilestop()
     self:BuildFrameInner()
@@ -296,6 +307,7 @@ end
 
 function ReviewPrompt:BuildFrameInner()
     local data = self.current
+    local inGroup = self.group and not self.editingReviewID
 
     if not self.frame then
         local frame = AceGUI:Create("Window")
@@ -306,9 +318,9 @@ function ReviewPrompt:BuildFrameInner()
         frame:SetLayout("List")
         frame:EnableResize(false)
         frame:SetCallback("OnClose", function()
-            if self.group then
-                -- closing a group window skips everyone still waiting
-                self:GroupFinish()
+            if self.group and not self.editingReviewID then
+                -- closing a group window puts it off, it doesn't throw anything away
+                self:GroupLater()
                 return
             end
             -- closing the window counts as skipping the current player
@@ -328,7 +340,7 @@ function ReviewPrompt:BuildFrameInner()
     outer:ReleaseChildren()
     outer:SetTitle(self.editingReviewID
         and ("Edit Note: " .. addon:GetShortName(data.nameRealm))
-        or self.group and string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.groupIndex, #self.group)
+        or inGroup and string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.groupIndex, #self.group)
         or string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.shownCount, self.batchTotal))
     outer:Show()
 
@@ -339,7 +351,7 @@ function ReviewPrompt:BuildFrameInner()
     frame:SetLayout("List")
     frame:SetFullWidth(true)
     frame:SetHeight(windowSettings.height - 110)
-    if self.group then
+    if inGroup then
         -- The tab row and border take about 40 pixels more than the plain form,
         -- so leave that out or the Skip / Save footer is pushed off the window.
         local tabs = self:CreateGroupTabs(windowSettings.height - 150)
@@ -362,7 +374,7 @@ function ReviewPrompt:BuildFrameInner()
     header:SetFullWidth(true)
     local headerText = data.encounter or "Unknown"
     local remaining = (self.batchTotal or 0) - (self.shownCount or 0)
-    if not self.editingReviewID and not self.group and remaining > 0 then
+    if not self.editingReviewID and not inGroup and remaining > 0 then
         headerText = headerText .. "   |cff999999- " .. remaining .. " more after this one|r"
     end
     header:SetText(headerText)
@@ -421,17 +433,27 @@ function ReviewPrompt:BuildFrameInner()
     buttonRow:SetFullWidth(true)
     buttonRow:SetLayout("Flow")
 
+    if inGroup then
+        local laterBtn = AceGUI:Create("Button")
+        laterBtn:SetText("Later")
+        laterBtn:SetWidth(110)
+        laterBtn:SetCallback("OnClick", function() self:GroupLater() end)
+        buttonRow:AddChild(laterBtn)
+    end
+
     local skipBtn = AceGUI:Create("Button")
     skipBtn:SetText(self.editingReviewID and "Cancel" or L["Skip"])
-    skipBtn:SetWidth(170)
+    skipBtn:SetWidth(110)
     skipBtn:SetCallback("OnClick", function() self:Skip() end)
     buttonRow:AddChild(skipBtn)
 
     -- Reads "Save as Fine/Solid" while nothing has been touched (see
     -- RefreshRequirements) - the one-click path for an unremarkable run.
     local saveBtn = AceGUI:Create("Button")
-    saveBtn:SetText(L["Save"])
-    saveBtn:SetWidth(170)
+    saveBtn:SetText(SaveLabel(L["Save"]))
+    saveBtn:SetWidth(230)
+    -- The main action: bigger text in green, where Later and Skip stay plain.
+    pcall(function() saveBtn.text:SetFontObject(GameFontHighlightLarge) end)
     saveBtn:SetCallback("OnClick", function() self:Save() end)
     buttonRow:AddChild(saveBtn)
     self.saveBtn = saveBtn
@@ -528,7 +550,7 @@ function ReviewPrompt:RefreshRequirements()
             untouched = form.social == "average" and form.performance == "average"
                 and strtrim(form.socialNote or "") == "" and strtrim(form.performanceNote or "") == ""
         end
-        self.saveBtn:SetText(untouched and (simple and "Save as Fine" or "Save as Fine / Solid") or L["Save"])
+        self.saveBtn:SetText(SaveLabel(untouched and (simple and "Save as Fine" or "Save as Fine/Solid") or L["Save"]))
     end
 end
 
@@ -1138,18 +1160,20 @@ local function ClassColoredName(data)
     return shortName
 end
 
+local function NewMember(data)
+    local form = {
+        social = "average", performance = "average", socialNote = "", performanceNote = "",
+        role = data.role, mode = addon.db.global.settings.simpleNotes and "simple" or "detailed", selectedFights = {},
+    }
+    for j in ipairs(data.fights or {}) do form.selectedFights[j] = true end
+    return { data = data, form = form, status = "pending" }
+end
+
 function ReviewPrompt:StartGroup(list)
-    self.active = true  -- anything queued meanwhile waits behind this window
+    self.active = true  -- anything queued meanwhile joins this window
     self.group = {}
-    local simple = addon.db.global.settings.simpleNotes
-    for i, data in ipairs(list) do
-        local form = {
-            social = "average", performance = "average", socialNote = "", performanceNote = "",
-            role = data.role, mode = simple and "simple" or "detailed", selectedFights = {},
-        }
-        for j in ipairs(data.fights or {}) do form.selectedFights[j] = true end
-        self.group[i] = { data = data, form = form, status = "pending" }
-    end
+    self.groupHidden = false
+    for i, data in ipairs(list) do self.group[i] = NewMember(data) end
     self:ShowMember(1)
     pcall(function()
         self.frame.frame:SetAlpha(0)
@@ -1235,9 +1259,10 @@ function ReviewPrompt:GroupFinish()
             addon:GetModule("ChatLog"):Clear(member.data.guid)
         end
     end
-    self.group, self.groupIndex = nil, nil
+    self.group, self.groupIndex, self.groupHidden = nil, nil, false
     if self.frame then self.frame:Hide() end
     self.active = false
+    self:UpdateReminders()
 
     -- Anything that arrived while this window was open gets the usual flow.
     if #self.queue > 0 then
@@ -1245,4 +1270,111 @@ function ReviewPrompt:GroupFinish()
         self.shownCount = 0
         self:ShowNext()
     end
+end
+
+----------------------------------------------------------------------
+-- Putting a group off until later
+----------------------------------------------------------------------
+-- "Later" closes the window but keeps everyone's form, fights and chat in
+-- memory. A chat line every minute, and a tinted minimap button, remind you
+-- until they are all saved or skipped. (It is kept in memory only: a /reload
+-- or logout drops it.)
+
+local REMINDER_SECONDS = 60
+
+function ReviewPrompt:PendingCount()
+    local count = 0
+    for _, member in ipairs(self.group or {}) do
+        if member.status == "pending" then count = count + 1 end
+    end
+    return count
+end
+
+-- True when there are notes put off and waiting.
+function ReviewPrompt:HasWaiting()
+    return self.group ~= nil and self.groupHidden == true and self:PendingCount() > 0
+end
+
+function ReviewPrompt:GroupLater()
+    if not self.group then return end
+    if self.frame then self.frame:Hide() end
+    self.groupHidden = true
+    local waiting = self:PendingCount()
+    addon:Print(string.format("Saved for later: %d note%s to write. Left-click the minimap button or type /aj notes when you're ready.",
+        waiting, waiting == 1 and "" or "s"))
+    self:UpdateReminders()
+end
+
+-- Brings the waiting window back.
+function ReviewPrompt:GroupReopen()
+    if not self.group then
+        addon:Print("You have no notes waiting.")
+        return
+    end
+    self.groupHidden = false
+    local show = 1
+    for index, member in ipairs(self.group) do
+        if member.status == "pending" then show = index break end
+    end
+    self:ShowMember(show)
+    pcall(function()
+        self.frame.frame:SetAlpha(0)
+        UIFrameFadeIn(self.frame.frame, 0.25, 0, 1)
+    end)
+    self:UpdateReminders()
+end
+
+-- Throws away everything still waiting ("/aj notes skip").
+function ReviewPrompt:GroupDrop()
+    if not self.group then
+        addon:Print("You have no notes waiting.")
+        return
+    end
+    self:GroupFinish()
+    addon:Print("Skipped the notes that were waiting.")
+end
+
+-- New people arriving while a group is open or put off join it.
+function ReviewPrompt:AddToGroup(list)
+    for _, data in ipairs(list) do
+        table.insert(self.group, NewMember(data))
+    end
+    if self.groupHidden then
+        local waiting = self:PendingCount()
+        addon:Print(string.format("%d more note%s added to the ones waiting (%d in all).",
+            #list, #list == 1 and "" or "s", waiting))
+        self:UpdateReminders()
+    elseif self.frame and self.frame:IsShown() then
+        -- Rebuilt a moment later so the new tabs appear.
+        C_Timer.After(0, function()
+            if self.group and not self.groupHidden then self:ShowMember(self.groupIndex or 1) end
+        end)
+    end
+end
+
+function ReviewPrompt:Remind()
+    if not self:HasWaiting() then return end
+    local names = {}
+    for _, member in ipairs(self.group) do
+        if member.status == "pending" then table.insert(names, addon:GetShortName(member.data.nameRealm)) end
+    end
+    local shown = {}
+    for i = 1, math.min(#names, 4) do shown[i] = names[i] end
+    local text = table.concat(shown, ", ")
+    if #names > 4 then text = text .. string.format(" and %d more", #names - 4) end
+    addon:Print(string.format("You still have %d note%s to write: %s. Left-click the minimap button or type /aj notes.",
+        #names, #names == 1 and "" or "s", text))
+end
+
+-- Starts or stops the minute-by-minute reminder and the minimap tint to match
+-- whether anything is waiting.
+function ReviewPrompt:UpdateReminders()
+    local waiting = self:HasWaiting()
+    if waiting and not self.reminderTicker then
+        self.reminderTicker = C_Timer.NewTicker(REMINDER_SECONDS, function() self:Remind() end)
+    elseif not waiting and self.reminderTicker then
+        self.reminderTicker:Cancel()
+        self.reminderTicker = nil
+    end
+    addon:GetModule("MinimapButton"):SetAttention(waiting)
 end
