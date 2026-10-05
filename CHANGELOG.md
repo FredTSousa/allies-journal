@@ -4,7 +4,7 @@
 
 - At the end of a run the whole group now shares one note window with a tab per person (fight bars, chat and quick tags all included), instead of a window each. It can be switched off in `/aj options`.
 - A **Later** button puts the notes off: the window closes, everything is kept in memory, and you get a chat reminder every minute plus a green, flashing minimap button until they are written or skipped. Left-click the minimap button or type `/aj notes` to come back (`/aj notes skip` drops them). Closing the window with the X does the same as Later.
-- Save is now the main button in the note window (bigger and blue, on the right).
+- Save is now the main button in the note window (bigger, on the right; Later and Skip are smaller).
 - A line in chat when someone you have a note on joins your group (how it went, how many sessions together, and your note). Not in raids.
 - At the end of a dungeon, a line in chat listing who in the group you already have a note on ("Familiar faces this run"). Not in raids.
 - `/aj runs`: a diary of your recorded runs, newest first, with who was there and a note you can write about each run. It is built from the sessions you already have, so your past runs show up too and nothing extra is stored apart from the notes you type.

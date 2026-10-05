@@ -3,42 +3,18 @@ local ReviewPrompt = addon:NewModule("ReviewPrompt")
 local AceGUI = LibStub("AceGUI-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
--- Makes a stock Button look like the main action: the same Blizzard button
--- (bevel, hover and pressed states and all) tinted blue and a little taller.
--- Blue because green, yellow and red already mean how a run went.
--- Buttons are pooled and shared, so the original look is put back when it is
+-- Makes a stock Button read as the main action by size alone: taller, with a
+-- larger label. Same colour as every other button on purpose. Buttons are
+-- pooled and shared, so the original size and font are put back when it is
 -- released.
 local function StyleAsPrimary(button)
-    local frame = button.frame
-    local function Tint(texture, on)
-        if not texture or not texture.SetVertexColor then return end
-        if texture.SetDesaturated then texture:SetDesaturated(on) end
-        if on then texture:SetVertexColor(0.05, 0.45, 1) else texture:SetVertexColor(1, 1, 1) end
-    end
-    local function Apply(on)
-        for _, region in ipairs({ frame:GetRegions() }) do
-            if region.IsObjectType and region:IsObjectType("Texture") then Tint(region, on) end
-        end
-        for _, getter in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetDisabledTexture" }) do
-            if frame[getter] then Tint(frame[getter](frame), on) end
-        end
-    end
-    -- The tinted red art comes out dark, so a soft additive green layer on top
-    -- lifts it to a lighter blue.
-    if not frame.ajLift then
-        local lift = frame:CreateTexture(nil, "OVERLAY")
-        lift:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -3)
-        lift:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3)
-        lift:SetColorTexture(0.0, 0.42, 1, 0.55)
-        lift:SetBlendMode("ADD")
-        frame.ajLift = lift
-    end
-    frame.ajLift:Show()
-    Apply(true)
-    button:SetHeight(32)
+    local text = button.text
+    local path, size, flags
+    if text and text.GetFont then path, size, flags = text:GetFont() end
+    if path and size then text:SetFont(path, size + 3, flags) end
+    button:SetHeight(34)
     button:SetCallback("OnRelease", function()
-        Apply(false)
-        frame.ajLift:Hide()
+        if path and size then text:SetFont(path, size, flags) end
         button:SetHeight(24)
     end)
 end
@@ -476,21 +452,21 @@ function ReviewPrompt:BuildFrameInner()
     if inGroup then
         local laterBtn = AceGUI:Create("Button")
         laterBtn:SetText("Later")
-        laterBtn:SetWidth(110)
+        laterBtn:SetWidth(70)
         laterBtn:SetCallback("OnClick", function() self:GroupLater() end)
         buttonRow:AddChild(laterBtn)
     end
 
     local skipBtn = AceGUI:Create("Button")
     skipBtn:SetText(self.editingReviewID and "Cancel" or L["Skip"])
-    skipBtn:SetWidth(110)
+    skipBtn:SetWidth(70)
     skipBtn:SetCallback("OnClick", function() self:Skip() end)
     buttonRow:AddChild(skipBtn)
 
     -- Pushes Save to the right edge of the window: an invisible label as
     -- wide as the space left after the buttons on each side.
-    local leftWidth = (inGroup and 110 or 0) + 110
-    local saveWidth = 230
+    local leftWidth = (inGroup and 70 or 0) + 70
+    local saveWidth = 250
     local spacer = AceGUI:Create("Label")
     spacer:SetText(" ")
     spacer:SetWidth(math.max(1, windowSettings.width - 32 - leftWidth - saveWidth - 12))
@@ -501,7 +477,7 @@ function ReviewPrompt:BuildFrameInner()
     local saveBtn = AceGUI:Create("Button")
     saveBtn:SetText(SaveLabel(L["Save"]))
     saveBtn:SetWidth(saveWidth)
-    StyleAsPrimary(saveBtn)  -- the main action; Later and Skip stay plain
+    StyleAsPrimary(saveBtn)  -- the main action; Later and Skip are smaller
     saveBtn:SetCallback("OnClick", function() self:Save() end)
     buttonRow:AddChild(saveBtn)
     self.saveBtn = saveBtn
