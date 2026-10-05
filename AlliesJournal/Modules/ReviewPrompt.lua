@@ -22,10 +22,22 @@ local function StyleAsPrimary(button)
             if frame[getter] then Tint(frame[getter](frame), on) end
         end
     end
+    -- The tinted red art comes out dark, so a soft additive green layer on top
+    -- lifts it to a lighter green.
+    if not frame.ajLift then
+        local lift = frame:CreateTexture(nil, "OVERLAY")
+        lift:SetPoint("TOPLEFT", frame, "TOPLEFT", 3, -3)
+        lift:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -3, 3)
+        lift:SetColorTexture(0.45, 1, 0.45, 0.30)
+        lift:SetBlendMode("ADD")
+        frame.ajLift = lift
+    end
+    frame.ajLift:Show()
     Apply(true)
     button:SetHeight(32)
     button:SetCallback("OnRelease", function()
         Apply(false)
+        frame.ajLift:Hide()
         button:SetHeight(24)
     end)
 end
@@ -480,7 +492,7 @@ function ReviewPrompt:BuildFrameInner()
     local saveWidth = 230
     local spacer = AceGUI:Create("Label")
     spacer:SetText(" ")
-    spacer:SetWidth(math.max(1, windowSettings.width - 56 - leftWidth - saveWidth - 12))
+    spacer:SetWidth(math.max(1, windowSettings.width - 32 - leftWidth - saveWidth - 12))
     buttonRow:AddChild(spacer)
 
     -- Reads "Save as Fine/Solid" while nothing has been touched (see
