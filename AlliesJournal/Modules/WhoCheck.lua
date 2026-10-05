@@ -53,14 +53,32 @@ function WhoCheck:GetPseudoAlly(nameRealm)
     }
 end
 
--- Text for the Check Status button.
-function WhoCheck:ButtonText()
-    if not self.queue then return "Check Not Recent" end
+-- What the button says and whether it can be clicked right now:
+--   no check running      "Check Not Recent"
+--   waiting for a reply   "Checking <name> (2/5)"      (greyed out)
+--   cooling down          "Wait 3s - <name> next (3/5)" (greyed out, counts down)
+--   ready for the next    "Check <name> (3/5)"
+-- The wait is the server's /who throttle, so the count is how long until the
+-- next click will be accepted.
+function WhoCheck:ButtonState()
+    if not self.queue then return "Check Not Recent", false end
     local done = self.total - #self.queue - (self.pending and 1 or 0)
+    local position = string.format("(%d/%d)", done + 1, self.total)
+
     if self.pending then
-        return string.format("Checking %d of %d...", done + 1, self.total)
+        return string.format("Checking %s %s", addon:GetShortName(self.pending), position), true
     end
-    return string.format("Not Recent: %d of %d", done + 1, self.total)
+
+    local nextName = self.queue[1] and addon:GetShortName(self.queue[1]) or "next"
+    local wait = math.ceil(QUERY_GAP - (GetTime() - (self.lastSent or -QUERY_GAP)))
+    if wait > 0 then
+        return string.format("Wait %ds - %s %s", wait, nextName, position), true
+    end
+    return string.format("Check %s %s", nextName, position), false
+end
+
+function WhoCheck:ButtonText()
+    return (self:ButtonState())
 end
 
 -- Who's been checked and who's left, for the button's tooltip. Names are
@@ -102,9 +120,13 @@ function WhoCheck:Click(names)
         self.checkedThisRun = {}
         self:RegisterEvent("WHO_LIST_UPDATE", "OnWhoListUpdate")
         addon:Print(string.format("Checking %d player(s) that aren't in Recent Allies, using /who - click the button once per player (it counts down).", self.total))
+        -- Keeps the button's countdown moving between clicks.
+        self.ticker = C_Timer.NewTicker(0.5, function()
+            addon:GetModule("Browser"):UpdateWhoButton()
+        end)
     end
 
-    local wait = QUERY_GAP - (time() - (self.lastSent or 0))
+    local wait = QUERY_GAP - (GetTime() - (self.lastSent or -QUERY_GAP))
     if wait > 0 then
         addon:Print(string.format("/who is throttled - click again in %d second(s).", math.ceil(wait)))
         return
@@ -117,6 +139,7 @@ function WhoCheck:Finish()
     self:UnregisterEvent("WHO_LIST_UPDATE")
     SetWhoToUi(false)
     addon:Print(string.format("/who check done: %d of %d online.", self.found or 0, self.total or 0))
+    if self.ticker then self.ticker:Cancel() self.ticker = nil end
     self.queue, self.pending, self.pendingToken = nil, nil, nil
     addon:GetModule("Browser"):UpdateWhoButton()
 end
@@ -129,7 +152,7 @@ function WhoCheck:SendNext()
     end
 
     self.pending = nameRealm
-    self.lastSent = time()
+    self.lastSent = GetTime()
     local token = {}
     self.pendingToken = token
 

@@ -695,8 +695,12 @@ function Browser:Refresh()
     buttonRow:AddChild(pinBtn)
 
     local whoBtn = AceGUI:Create("Button")
-    whoBtn:SetText(addon:GetModule("WhoCheck"):ButtonText())
-    whoBtn:SetWidth(170)
+    do
+        local text, disabled = addon:GetModule("WhoCheck"):ButtonState()
+        whoBtn:SetText(text)
+        whoBtn:SetDisabled(disabled)
+    end
+    whoBtn:SetWidth(260)
     self.whoBtn = whoBtn
     whoBtn:SetCallback("OnClick", function() self:CheckOfflineStatus() end)
     whoBtn:SetCallback("OnEnter", function(widget)
@@ -711,8 +715,6 @@ function Browser:Refresh()
         GameTooltip:Show()
     end)
     whoBtn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
-    buttonRow:AddChild(whoBtn)
-
     -- A second row for the two views of your history that sit beside the list.
     local viewRow = AceGUI:Create("SimpleGroup")
     viewRow:SetFullWidth(true)
@@ -730,6 +732,9 @@ function Browser:Refresh()
     numbersBtn:SetWidth(120)
     numbersBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowNumbers() end)
     viewRow:AddChild(numbersBtn)
+    -- The /who check lives here, where its longer label (name, count and
+    -- countdown) has room.
+    viewRow:AddChild(whoBtn)
 
     local search = AceGUI:Create("EditBox")
     search:SetLabel("Search names and notes")
@@ -867,7 +872,9 @@ end
 -- Keeps the Check Status button's label (and its remaining count) current.
 function Browser:UpdateWhoButton()
     if self.whoBtn and self.frame and self.frame:IsShown() then
-        self.whoBtn:SetText(addon:GetModule("WhoCheck"):ButtonText())
+        local text, disabled = addon:GetModule("WhoCheck"):ButtonState()
+        self.whoBtn:SetText(text)
+        self.whoBtn:SetDisabled(disabled)
     end
 end
 
