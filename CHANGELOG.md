@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.2-beta
+
+- Fixed an error on login in 0.3.1-beta that stopped waiting notes from surviving a `/reload`.
+
 ## 0.3.1-beta
 
 - Notes you have not written yet (open or put off with Later) now survive a `/reload` or relog, for up to 24 hours.

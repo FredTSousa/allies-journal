@@ -1,5 +1,5 @@
 local addon = AlliesJournal
-local ReviewPrompt = addon:NewModule("ReviewPrompt")
+local ReviewPrompt = addon:NewModule("ReviewPrompt", "AceEvent-3.0")
 local AceGUI = LibStub("AceGUI-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
