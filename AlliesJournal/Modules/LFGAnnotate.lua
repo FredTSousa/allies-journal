@@ -325,6 +325,10 @@ function LFGAnnotate:ScanBrowseResults()
         return
     end
 
+    -- Nothing to annotate while the Group Finder list isn't on screen. This
+    -- runs five times a second, so skip it all when the list is hidden.
+    if scrollBox.IsVisible and not scrollBox:IsVisible() then return end
+
     -- Attached lazily here (not in OnEnable) since the LFG panel's frames
     -- don't exist until Blizzard_LookingForGroupUI has actually loaded,
     -- which OnEnable can't wait for. Scrolling forces an immediate rescan
