@@ -324,16 +324,20 @@ function ReviewPrompt:BuildFrame()
         or string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.shownCount, self.batchTotal))
     outer:Show()
 
-    if self.group then self:AddGroupStrip(outer) end
-
     -- Scrollable so a long form doesn't overflow the fixed-height window.
     -- Its height leaves room under it for the fixed footer (status line +
     -- buttons) added to `outer` at the end of this function.
     local frame = AceGUI:Create("ScrollFrame")
     frame:SetLayout("List")
     frame:SetFullWidth(true)
-    frame:SetHeight(windowSettings.height - 110 - (self.group and 36 or 0))
-    outer:AddChild(frame)
+    frame:SetHeight(windowSettings.height - 110)
+    if self.group then
+        local tabs = self:CreateGroupTabs(windowSettings.height - 110)
+        tabs:AddChild(frame)
+        outer:AddChild(tabs)
+    else
+        outer:AddChild(frame)
+    end
 
     -- Everything below belongs to this build only - rating clicks update
     -- these widgets in place rather than rebuilding the whole window.
@@ -409,15 +413,15 @@ function ReviewPrompt:BuildFrame()
 
     local skipBtn = AceGUI:Create("Button")
     skipBtn:SetText(self.editingReviewID and "Cancel" or L["Skip"])
-    skipBtn:SetWidth(100)
+    skipBtn:SetWidth(170)
     skipBtn:SetCallback("OnClick", function() self:Skip() end)
     buttonRow:AddChild(skipBtn)
 
-    -- Reads "Save as Fine / Solid" while nothing has been touched (see
+    -- Reads "Save as Fine/Solid" while nothing has been touched (see
     -- RefreshRequirements) - the one-click path for an unremarkable run.
     local saveBtn = AceGUI:Create("Button")
     saveBtn:SetText(L["Save"])
-    saveBtn:SetWidth(150)
+    saveBtn:SetWidth(170)
     saveBtn:SetCallback("OnClick", function() self:Save() end)
     buttonRow:AddChild(saveBtn)
     self.saveBtn = saveBtn
@@ -1152,13 +1156,11 @@ function ReviewPrompt:ShowMember(index)
     self:BuildFrame()
 end
 
--- The row of names above the form: saved people get a check, skipped ones
--- are greyed, the one being shown has an arrow.
-function ReviewPrompt:AddGroupStrip(container)
-    local strip = AceGUI:Create("SimpleGroup")
-    strip:SetFullWidth(true)
-    strip:SetLayout("Flow")
-
+-- A tab per person around the form: the one being shown is the selected tab,
+-- saved people get a check (and can't be opened again, which would file the
+-- note twice), skipped ones are greyed.
+function ReviewPrompt:CreateGroupTabs(height)
+    local entries = {}
     for index, member in ipairs(self.group) do
         local short = addon:GetShortName(member.data.nameRealm)
         local text
@@ -1169,26 +1171,27 @@ function ReviewPrompt:AddGroupStrip(container)
         else
             text = ClassColoredName(member.data)
         end
-        if index == self.groupIndex then text = "|cffffd100>|r " .. text end
-
-        local btn = AceGUI:Create("Button")
-        btn:SetText(text)
-        btn:SetAutoWidth(true)
-        btn:SetHeight(22)
-        btn:SetDisabled(member.status == "saved")  -- already filed; opening it again would duplicate the note
-        btn:SetCallback("OnClick", function()
-            if index == self.groupIndex then return end
-            -- Rebuilt a moment later: this button is released by the rebuild.
-            C_Timer.After(0, function()
-                local target = self.group and self.group[index]
-                if not target then return end
-                if target.status == "skipped" then target.status = "pending" end
-                self:ShowMember(index)
-            end)
-        end)
-        strip:AddChild(btn)
+        entries[index] = { value = index, text = text, disabled = member.status == "saved" }
     end
-    container:AddChild(strip)
+
+    local tabs = AceGUI:Create("TabGroup")
+    tabs:SetLayout("Fill")
+    tabs:SetFullWidth(true)
+    tabs:SetHeight(height)
+    tabs:SetTabs(entries)
+    tabs:SelectTab(self.groupIndex)
+    tabs:SetCallback("OnGroupSelected", function(_, _, value)
+        local index = tonumber(value)
+        if not index or index == self.groupIndex then return end
+        -- Rebuilt a moment later: this tab is released by the rebuild.
+        C_Timer.After(0, function()
+            local target = self.group and self.group[index]
+            if not target then return end
+            if target.status == "skipped" then target.status = "pending" end
+            self:ShowMember(index)
+        end)
+    end)
+    return tabs
 end
 
 -- Marks the person being shown as saved or skipped and moves to the next
