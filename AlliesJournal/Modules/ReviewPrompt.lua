@@ -332,7 +332,9 @@ function ReviewPrompt:BuildFrame()
     frame:SetFullWidth(true)
     frame:SetHeight(windowSettings.height - 110)
     if self.group then
-        local tabs = self:CreateGroupTabs(windowSettings.height - 110)
+        -- The tab row and border take about 40 pixels more than the plain form,
+        -- so leave that out or the Skip / Save footer is pushed off the window.
+        local tabs = self:CreateGroupTabs(windowSettings.height - 150)
         tabs:AddChild(frame)
         outer:AddChild(tabs)
     else
