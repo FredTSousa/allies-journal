@@ -2,7 +2,7 @@
 
 ## 0.3.1-beta
 
-- Notes you have not written yet (open or put off with Later) now survive a `/reload` or relog, for up to 12 hours.
+- Notes you have not written yet (open or put off with Later) now survive a `/reload` or relog, for up to 48 hours.
 - The journal window has less empty space under the title bar.
 
 ## 0.3.0-beta
