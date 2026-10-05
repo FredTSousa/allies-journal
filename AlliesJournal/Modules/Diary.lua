@@ -132,6 +132,36 @@ local function AddStat(container, big, caption)
     end
 end
 
+-- A name on the left and its bar/figure on the right, so a list lines up.
+local function AddRow(container, left, right)
+    local row = AceGUI:Create("SimpleGroup")
+    row:SetFullWidth(true)
+    row:SetLayout("Flow")
+    local a = AceGUI:Create("Label")
+    a:SetRelativeWidth(0.36)
+    a:SetText(left)
+    row:AddChild(a)
+    local b = AceGUI:Create("Label")
+    b:SetRelativeWidth(0.62)
+    b:SetText(right)
+    row:AddChild(b)
+    container:AddChild(row)
+end
+
+-- Small facts two to a row: a gray title over the value.
+local function AddTiles(container, tiles)
+    local grid = AceGUI:Create("SimpleGroup")
+    grid:SetFullWidth(true)
+    grid:SetLayout("Flow")
+    for _, tile in ipairs(tiles) do
+        local label = AceGUI:Create("Label")
+        label:SetRelativeWidth(0.49)
+        label:SetText(GRAY .. tile[1] .. "|r\n|cffffd100" .. tile[2] .. "|r" .. (tile[3] and ("\n" .. GRAY .. tile[3] .. "|r") or ""))
+        grid:AddChild(label)
+    end
+    container:AddChild(grid)
+end
+
 local function TopN(list, n)
     local out = {}
     for i = 1, math.min(n, #list) do out[i] = list[i] end
@@ -251,64 +281,63 @@ function Diary:ShowNumbers(period)
     end
     local zones, weekdays, parts = Ranked(byZone), Ranked(byWeekday), Ranked(byPart)
 
-    ------------------------------------------------------------ headline
-    AddHeading(scroll, PERIOD_LABELS[period])
+    local function Spacer() AddLabel(scroll, " ") end
+
+    -- Headline
+    Spacer()
     AddStat(scroll, FormatDuration(totalGrouped),
         string.format("grouped with %s across %s", Plural(#people, "different person", "different people"), Plural(#runs, "run", "runs")))
+    Spacer()
 
-    ------------------------------------------------------------ companions
+    -- Companions
     if #people > 0 then
-        AddHeading(scroll, "Your companions")
+        AddHeading(scroll, "Companions")
+        Spacer()
         AddStat(scroll, people[1].name,
             string.format("your most-played-with: %s over %s", FormatDuration(people[1].seconds), Plural(people[1].count, "session", "sessions")))
+        Spacer()
         local top = TopN(people, 5)
-        local lines = {}
-        for i, person in ipairs(top) do
-            lines[i] = string.format("%s  %s %s%s|r", Bar(person.seconds / top[1].seconds, 255, 209, 0),
-                person.name, GRAY, FormatDuration(person.seconds))
+        for _, person in ipairs(top) do
+            AddRow(scroll, person.name, Bar(person.seconds / top[1].seconds, 255, 209, 0) .. "  " .. GRAY .. FormatDuration(person.seconds) .. "|r")
         end
-        AddLabel(scroll, table.concat(lines, "\n"))
+        Spacer()
     end
 
-    ------------------------------------------------------------ places and times
-    if #zones > 0 then
-        AddHeading(scroll, "Where and when")
-        AddStat(scroll, zones[1].key, string.format("your favorite place - %s", Plural(zones[1].count, "run", "runs")))
-        if #zones > 1 then
-            local others = {}
-            for i = 2, math.min(3, #zones) do
-                others[#others + 1] = string.format("%s (%d)", zones[i].key, zones[i].count)
-            end
-            AddLabel(scroll, GRAY .. "Then: " .. table.concat(others, ", ") .. "|r")
-        end
-        if #weekdays > 0 then
-            AddLabel(scroll, string.format("Your busiest day is |cffffd100%s|r (%s)%s.",
-                weekdays[1].key, Plural(weekdays[1].count, "run", "runs"),
-                #parts > 0 and (", and you play most in the |cffffd100" .. parts[1].key .. "|r") or ""))
-        end
+    -- Highlights, two to a row
+    local tiles = {}
+    if zones[1] then
+        local others = {}
+        for i = 2, math.min(3, #zones) do others[#others + 1] = string.format("%s (%d)", zones[i].key, zones[i].count) end
+        table.insert(tiles, { "Favorite place", zones[1].key, Plural(zones[1].count, "run", "runs")
+            .. (#others > 0 and (", then " .. table.concat(others, ", ")) or "") })
     end
-
+    if weekdays[1] then
+        table.insert(tiles, { "Busiest day", weekdays[1].key, Plural(weekdays[1].count, "run", "runs")
+            .. (parts[1] and (", mostly " .. parts[1].key) or "") })
+    end
     if longest then
-        AddStat(scroll, FormatDuration(longest.groupedSeconds),
-            string.format("your longest run - %s, %s", longest.zone, date("%Y-%m-%d", longest.date)))
+        table.insert(tiles, { "Longest run", FormatDuration(longest.groupedSeconds), longest.zone .. ", " .. date("%Y-%m-%d", longest.date) })
     end
     if #runs > 0 then
-        AddLabel(scroll, string.format("Your average group had |cffffd100%.1f|r other players.", members / #runs))
+        table.insert(tiles, { "Average group", string.format("%.1f other players", members / #runs) })
     end
 
-    ------------------------------------------------------------ new faces
+    local again = 0
+    for _, person in ipairs(people) do if person.total >= 2 then again = again + 1 end end
     if #people > 0 then
-        AddHeading(scroll, "New faces and regulars")
-        local again = 0
-        for _, person in ipairs(people) do if person.total >= 2 then again = again + 1 end end
         if cutoff > 0 then
             local fresh = 0
             for _, person in ipairs(people) do if person.first and person.first >= cutoff then fresh = fresh + 1 end end
-            AddLabel(scroll, string.format("|cffffd100%d|r new %s, and you played with |cffffd100%d|r %s you'd met before.",
-                fresh, fresh == 1 and "face" or "faces", again, again == 1 and "person" or "people"))
-        else
-            AddLabel(scroll, string.format("You've played with |cffffd100%s|r more than once.", Plural(again, "person", "people")))
+            table.insert(tiles, { "New faces", tostring(fresh), again > 0 and (again .. " you had met before") or "all first meetings" })
+        elseif again > 0 then
+            table.insert(tiles, { "Played with again", Plural(again, "person", "people") })
         end
+    end
+
+    if #tiles > 0 then
+        AddHeading(scroll, "Highlights")
+        Spacer()
+        AddTiles(scroll, tiles)
         if #people >= 3 then
             local share = again / #people
             local style = share >= 0.6 and "|cffffd100The Regular|r - you keep coming back to the same people."
@@ -316,41 +345,41 @@ function Diary:ShowNumbers(period)
                 or "|cffffd100The Balanced Adventurer|r - a good mix of old friends and new faces."
             AddLabel(scroll, "Your style: " .. style)
         end
+        Spacer()
     end
 
-    ------------------------------------------------------------ how it went
+    -- How it went
     if notes > 0 then
         AddHeading(scroll, "How it went")
-        AddLabel(scroll, string.format("%s written. ", Plural(notes, "note", "notes")))
+        Spacer()
+        AddLabel(scroll, GRAY .. Plural(notes, "note", "notes") .. " written|r")
         local rows = {
             { "Great to play with", words.good, 64, 255, 64 },
             { "Fine", words.average, 255, 209, 0 },
             { "Not for me", words.bad, 255, 64, 64 },
         }
-        local lines = {}
-        for i, row in ipairs(rows) do
-            lines[i] = string.format("%s  %s %s%d|r", Bar(row[2] / notes, row[3], row[4], row[5]), row[1], GRAY, row[2])
+        for _, row in ipairs(rows) do
+            AddRow(scroll, row[1], Bar(row[2] / notes, row[3], row[4], row[5]) .. "  " .. GRAY .. row[2] .. "|r")
         end
-        AddLabel(scroll, table.concat(lines, "\n"))
-    end
 
-    ------------------------------------------------------------ roles
-    local roleCount = { tank = 0, healer = 0, dps = 0 }
-    local anyRole = false
-    for _, person in ipairs(people) do
-        local latest = addon:GetLatestReview(person.nameRealm)
-        if latest and roleCount[latest.role or ""] then
-            roleCount[latest.role] = roleCount[latest.role] + 1
-            anyRole = true
+        local roleCount = { tank = 0, healer = 0, dps = 0 }
+        local anyRole = false
+        for _, person in ipairs(people) do
+            local latest = addon:GetLatestReview(person.nameRealm)
+            if latest and roleCount[latest.role or ""] then
+                roleCount[latest.role] = roleCount[latest.role] + 1
+                anyRole = true
+            end
         end
-    end
-    if anyRole then
-        AddLabel(scroll, string.format("Roles you've grouped with (from your notes): %s tank%s, %s healer%s, %s DPS.",
-            roleCount.tank, roleCount.tank == 1 and "" or "s", roleCount.healer, roleCount.healer == 1 and "" or "s", roleCount.dps))
+        if anyRole then
+            Spacer()
+            AddLabel(scroll, GRAY .. string.format("Roles you've grouped with, from your notes: %d tank%s, %d healer%s, %d DPS.|r",
+                roleCount.tank, roleCount.tank == 1 and "" or "s", roleCount.healer, roleCount.healer == 1 and "" or "s", roleCount.dps))
+        end
     end
 
     if firstDate then
-        AddHeading(scroll, "Timeline")
-        AddLabel(scroll, string.format("First record: %s. Latest: %s.", date("%Y-%m-%d", firstDate), date("%Y-%m-%d", lastDate)))
+        Spacer()
+        AddLabel(scroll, GRAY .. string.format("From %s to %s.|r", date("%Y-%m-%d", firstDate), date("%Y-%m-%d", lastDate)))
     end
 end
