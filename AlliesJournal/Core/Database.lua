@@ -464,7 +464,7 @@ function addon:GetRuns()
     local items = {}
     for sessionId, session in pairs(g.sessions) do
         if session.date and owner[sessionId] then
-            table.insert(items, { session = session, nameRealm = owner[sessionId] })
+            table.insert(items, { id = sessionId, session = session, nameRealm = owner[sessionId] })
         end
     end
     table.sort(items, function(a, b) return a.session.date < b.session.date end)
@@ -476,12 +476,13 @@ function addon:GetRuns()
         if not (current and s.date - current.lastDate <= 120 and zone == current.zone) then
             current = {
                 id = "run" .. s.date, date = s.date, zone = zone, lastDate = s.date,
-                members = {}, groupedSeconds = 0, combatSeconds = 0,
+                members = {}, sessionIds = {}, groupedSeconds = 0, combatSeconds = 0,
             }
             table.insert(runs, current)
         end
         current.lastDate = s.date
         table.insert(current.members, item.nameRealm)
+        current.sessionIds[item.id] = true
         current.groupedSeconds = math.max(current.groupedSeconds, s.groupedSeconds or 0)
         current.combatSeconds = math.max(current.combatSeconds, s.combatSeconds or 0)
     end

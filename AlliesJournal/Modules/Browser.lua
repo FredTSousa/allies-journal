@@ -1295,6 +1295,14 @@ function Browser:ShowHistory(nameRealm)
         sessionsGroup:AddChild(empty)
     end
 
+    -- Your note on the whole run, shown under the session it belongs to.
+    local runNoteBySession = {}
+    for _, run in ipairs(addon:GetRuns()) do
+        if run.note ~= "" then
+            for sessionId in pairs(run.sessionIds) do runNoteBySession[sessionId] = run.note end
+        end
+    end
+
     for _, session in ipairs(sessions) do
         local dateStr = date("%Y-%m-%d %H:%M", session.date)
         if session ~= sessions[1] then AddSeparator(sessionsGroup) end
@@ -1316,6 +1324,10 @@ function Browser:ShowHistory(nameRealm)
         local heal = StatLine("Healing", "HPS", session.hps, session.groupMaxHps, session.groupTotalHps)
         if dmg then table.insert(lines, dmg) end
         if heal then table.insert(lines, heal) end
+        local runNote = runNoteBySession[session.id]
+        if runNote then
+            table.insert(lines, "|cffffd100Run note:|r |cffbbbbbb\"" .. runNote .. "\"|r")
+        end
         label:SetText(table.concat(lines, "\n"))
         row:AddChild(label)
 
