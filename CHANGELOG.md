@@ -19,6 +19,10 @@
 - Search in `/aj` now looks inside your notes and the places you played, not just names. Several words all have to match.
 - Each player now shows "Together so far": sessions, total time grouped, first and last date.
 - New option in `/aj options` (off by default): ask one question, "How was it?" (Great / Fine / Not for me), instead of Social and Performance, with one note box and one set of quick tags. Each note remembers how it was written, so switching never changes a note you already have, and editing a note opens it the way it was saved.
+- The "Check Not Recent" button in `/aj` shows what it is doing (which player it is on, "2 of 7") and a countdown until you can check the next one.
+- A note you ask for (right-click menu, Add Note on a target, or `/aj` with a name) opens right away with that person selected, even if the group window is put off or you are in the middle of another note.
+- The Group Finder scan no longer runs while the list is hidden, which is lighter on the game.
+- Fixed: after moving between people in the group note window, the previous person's damage bars could show up behind the buttons.
 
 ## 0.2.0-beta
 
