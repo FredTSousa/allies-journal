@@ -176,6 +176,12 @@ function AlliesJournal:OnInitialize()
     if g.settings.notices.onlineAlerts == nil then g.settings.notices.onlineAlerts = true end
     if g.settings.notices.facesSummary == nil then g.settings.notices.facesSummary = true end
     if g.settings.notices.runRecap == nil then g.settings.notices.runRecap = true end
+    if g.settings.notices.warnBad == nil then g.settings.notices.warnBad = false end
+    -- A star in front of what noted players say in chat, and a local safety
+    -- copy of the journal (see Backup).
+    if g.settings.chatIcons == nil then g.settings.chatIcons = true end
+    g.settings.backup = g.settings.backup or {}
+    if g.settings.backup.enabled == nil then g.settings.backup.enabled = true end
     g.settings.browserList.cardFade = g.settings.browserList.cardFade or 0.25
     g.settings.browserList.offlineDim = g.settings.browserList.offlineDim or 0.55
     -- Visual settings, editable live via /pr options. Every field uses its
@@ -433,6 +439,9 @@ function AlliesJournal:SlashCommand(input)
     elseif cmd == "notes" then
         local plan = self:GetModule("ReviewPrompt")
         if rest:lower() == "skip" then plan:GroupDrop() else plan:GroupReopen() end
+    elseif cmd == "backup" then
+        local entry = self:GetModule("Backup"):Snapshot("manual")
+        self:Print("Backed up your journal: " .. self:GetModule("Backup"):Describe(entry) .. ". Restore from /aj options.")
     elseif cmd == "runs" then
         self:GetModule("Diary"):ShowRuns()
     elseif cmd == "numbers" then
@@ -464,6 +473,7 @@ function AlliesJournal:SlashCommand(input)
         self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/notes) without opening the browser")
         self:Print("  /aj notes - open the notes you put off with Later (\"/aj notes skip\" drops them)")
         self:Print("  /aj runs - your recorded runs, with who was there and a note for each")
+        self:Print("  /aj backup - make a backup of your journal now (restore from /aj options)")
         self:Print("  /aj numbers - your journal in numbers")
         self:Print("  /aj minimap - show or hide the minimap button")
         self:Print("  /aj pinjournal - pin every player with a note who isn't pinned in Recent Allies yet (skips anyone marked 'Not for me' or 'Struggled' unless that's turned on in /aj options)")

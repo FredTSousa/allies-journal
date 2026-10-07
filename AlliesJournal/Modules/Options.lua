@@ -239,6 +239,9 @@ local function BuildGeneral(scroll)
         AddCheckbox(group, "At the end of a dungeon, show a short recap of the run",
             function() return notices.runRecap end,
             function(v) notices.runRecap = v and true or false end)
+        AddCheckbox(group, "Warn me on screen, with a sound, when someone I noted as Not for me joins my group",
+            function() return notices.warnBad end,
+            function(v) notices.warnBad = v and true or false end)
         AddCheckbox(group, "Tell me when someone I noted as Great comes online",
             function() return notices.onlineAlerts end,
             function(v) notices.onlineAlerts = v and true or false end)
@@ -274,6 +277,10 @@ local function BuildGeneral(scroll)
     end)
 
     Section(scroll, "Chat", function(group)
+        AddCheckbox(group, "Show a small star in front of what players I have a note on say",
+            function() return settings.chatIcons end,
+            function(v) settings.chatIcons = v and true or false end)
+        AddNote(group, "Its color follows how it went. Hover it to read your note, click it to open them in your journal. It only changes how the line is drawn.")
         local departureSummary = settings.departureSummary
         AddCheckbox(group, "Announce a recap when someone leaves before a note would show",
             function() return departureSummary.enabled end,
@@ -329,6 +336,44 @@ local function BuildGeneral(scroll)
             group:AddChild(resetBtn)
         end)
     end
+
+    Section(scroll, "Backup", function(group)
+        local Backup = addon:GetModule("Backup")
+        AddCheckbox(group, "Keep automatic backups of my journal",
+            function() return settings.backup.enabled end,
+            function(v) settings.backup.enabled = v and true or false end)
+        AddNote(group, "A copy of your notes, players and history is kept inside the saved data about every 12 hours, the last three. It stays on your computer and does not include your settings. Restoring saves your current journal as a backup first.")
+        local nowBtn = AceGUI:Create("Button")
+        nowBtn:SetText("Back up now")
+        nowBtn:SetWidth(160)
+        nowBtn:SetCallback("OnClick", function()
+            Backup:Snapshot("manual")
+            C_Timer.After(0, function() Options:Show() end)  -- rebuilt after this button is done
+        end)
+        group:AddChild(nowBtn)
+
+        local list = Backup:List()
+        if #list == 0 then
+            AddNote(group, "No backup yet. The first one is made a few seconds after you log in.")
+        end
+        for index, entry in ipairs(list) do
+            local row = AceGUI:Create("SimpleGroup")
+            row:SetFullWidth(true)
+            row:SetLayout("Flow")
+            local label = AceGUI:Create("Label")
+            label:SetText(Backup:Describe(entry))
+            label:SetRelativeWidth(0.74)
+            row:AddChild(label)
+            local restoreBtn = AceGUI:Create("Button")
+            restoreBtn:SetText("Restore")
+            restoreBtn:SetRelativeWidth(0.24)
+            restoreBtn:SetCallback("OnClick", function()
+                StaticPopup_Show("ALLIESJOURNAL_RESTORE_BACKUP", Backup:Describe(entry), nil, { index = index })
+            end)
+            row:AddChild(restoreBtn)
+            group:AddChild(row)
+        end
+    end)
 
     Section(scroll, "Reset", function(group)
         AddNote(group, "Puts every setting on all tabs back to its default. Your notes and player data are not touched.")
@@ -520,7 +565,9 @@ function Options:ResetAll()
     settings.recentAllies = { pinBad = false }
     settings.simpleNotes = false
     settings.playerStrip = true
-    settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true }
+    settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false }
+    settings.chatIcons = true
+    settings.backup = { enabled = true }
     settings.browserWindow = { width = 550, height = 700 }
     addon:GetModule("Browser"):ApplyWindowSize()
     settings.browserColors = {}

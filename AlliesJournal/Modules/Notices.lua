@@ -72,6 +72,17 @@ function Notices:PlayerJoined(nameRealm, classFile)
     if OnCooldown(self, "join", nameRealm, JOIN_COOLDOWN) then return end
 
     addon:Print(string.format("%s joined - %s", ColoredName(addon:GetShortName(nameRealm), classFile), description))
+
+    -- Optional louder warning for someone you marked Not for me.
+    local review = addon:GetLatestReview(nameRealm)
+    if s.warnBad and review and review.social == "bad" then
+        local axis = review.mode == "simple" and "simple" or "social"
+        pcall(function()
+            UIErrorsFrame:AddMessage(string.format("Heads up: %s is in your group (you noted: %s)",
+                addon:GetShortName(nameRealm), addon:RatingWord(axis, review.social)), 1, 0.3, 0.3, 1, 6)
+            PlaySound((SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959)
+        end)
+    end
 end
 
 -- At the end of a dungeon: who in the group you already have a note on.
