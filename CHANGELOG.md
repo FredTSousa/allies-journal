@@ -8,6 +8,8 @@
 - Search understands `class:priest`, `role:healer`, `guild:name`, `since:14` and `fav:yes`. Hover the search box for the list.
 - `/aj numbers` shows the bosses and mobs you defeated and how many group wipes there were along the way. Mobs are the ones that gave you experience, so grey mobs do not count.
 - Cleaning up old sessions now keeps their totals, so "Together so far" stays right.
+- A player's detail also shows the interrupts and dispels they did while you were grouped.
+- At the end of a dungeon, a short recap line in chat: how long it took, bosses, mobs, quests and group wipes, with a link to your runs. It can be switched off in `/aj options`.
 
 ## 0.3.2-beta
 

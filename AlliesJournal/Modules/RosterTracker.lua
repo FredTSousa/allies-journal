@@ -503,7 +503,10 @@ function RosterTracker:QueueEntireRoster(runId)
     end
     self:QueueCandidates(candidates, true, runId)
     -- After the sessions above are recorded, so the counts include this run.
-    if runId then addon:GetModule("Notices"):FamiliarFaces(candidates, runId) end
+    if runId then
+        addon:GetModule("Notices"):FamiliarFaces(candidates, runId)
+        addon:GetModule("Notices"):RunRecap(candidates, runId)
+    end
 end
 
 -- Runs alongside (not instead of) the review-prompt gate below, on the

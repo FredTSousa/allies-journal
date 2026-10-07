@@ -1167,6 +1167,9 @@ function Browser:ShowHistory(nameRealm)
         local lines = {}
         if #done > 0 then table.insert(lines, "Done together: " .. table.concat(done, ", ")) end
         if #seenText > 0 then table.insert(lines, "Seen as: " .. table.concat(seenText, ", ")) end
+        if stats.interrupts > 0 or stats.dispels > 0 then
+            table.insert(lines, string.format("Interrupts and dispels: %d and %d", stats.interrupts, stats.dispels))
+        end
         if #lines > 0 then
             local extra = AceGUI:Create("Label")
             extra:SetFullWidth(true)

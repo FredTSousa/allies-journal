@@ -1349,8 +1349,12 @@ local NOTES_LINK = "|cff40ff40|Haddon:AlliesJournal:notes|h[Write them now]|h|r"
 hooksecurefunc("SetItemRef", function(link)
     if type(link) ~= "string" then return end
     local kind, name, action = strsplit(":", link)
-    if kind == "addon" and name == "AlliesJournal" and action == "notes" then
-        addon:GetModule("ReviewPrompt"):GroupReopen()
+    if kind == "addon" and name == "AlliesJournal" then
+        if action == "notes" then
+            addon:GetModule("ReviewPrompt"):GroupReopen()
+        elseif action == "runs" then
+            addon:GetModule("Diary"):ShowRuns()
+        end
     end
 end)
 

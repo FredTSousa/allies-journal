@@ -740,6 +740,8 @@ function addon:ArchiveSession(record, session)
     archive.bosses = (archive.bosses or 0) + (session.bosses or 0)
     archive.quests = (archive.quests or 0) + (session.quests or 0)
     archive.mobs = (archive.mobs or 0) + (session.mobs or 0)
+    archive.interrupts = (archive.interrupts or 0) + (session.interrupts or 0)
+    archive.dispels = (archive.dispels or 0) + (session.dispels or 0)
     if session.role then
         archive.roles = archive.roles or {}
         archive.roles[session.role] = (archive.roles[session.role] or 0) + 1
@@ -753,7 +755,7 @@ end
 -- Totals for the "Together so far" lines: every recorded session plus the
 -- totals kept from sessions that were cleaned up.
 function addon:GetTogetherStats(nameRealm)
-    local stats = { sessions = 0, seconds = 0, dungeons = 0, bosses = 0, quests = 0, mobs = 0, roles = {} }
+    local stats = { sessions = 0, seconds = 0, dungeons = 0, bosses = 0, quests = 0, mobs = 0, interrupts = 0, dispels = 0, roles = {} }
     local record = self.db.global.players[nameRealm]
     if not record then return stats end
     local archive = record.archive
@@ -764,6 +766,8 @@ function addon:GetTogetherStats(nameRealm)
         stats.bosses = archive.bosses or 0
         stats.quests = archive.quests or 0
         stats.mobs = archive.mobs or 0
+        stats.interrupts = archive.interrupts or 0
+        stats.dispels = archive.dispels or 0
         stats.first, stats.last = archive.first, archive.last
         for role, count in pairs(archive.roles or {}) do stats.roles[role] = count end
     end
@@ -774,6 +778,8 @@ function addon:GetTogetherStats(nameRealm)
         stats.bosses = stats.bosses + (session.bosses or 0)
         stats.quests = stats.quests + (session.quests or 0)
         stats.mobs = stats.mobs + (session.mobs or 0)
+        stats.interrupts = stats.interrupts + (session.interrupts or 0)
+        stats.dispels = stats.dispels + (session.dispels or 0)
         if session.role then stats.roles[session.role] = (stats.roles[session.role] or 0) + 1 end
         if session.date then
             stats.first = stats.first and math.min(stats.first, session.date) or session.date

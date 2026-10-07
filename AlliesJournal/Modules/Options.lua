@@ -236,6 +236,9 @@ local function BuildGeneral(scroll)
         AddCheckbox(group, "At the end of a dungeon, tell me who in the group I already know",
             function() return notices.facesSummary end,
             function(v) notices.facesSummary = v and true or false end)
+        AddCheckbox(group, "At the end of a dungeon, show a short recap of the run",
+            function() return notices.runRecap end,
+            function(v) notices.runRecap = v and true or false end)
         AddCheckbox(group, "Tell me when someone I noted as Great comes online",
             function() return notices.onlineAlerts end,
             function(v) notices.onlineAlerts = v and true or false end)
@@ -517,7 +520,7 @@ function Options:ResetAll()
     settings.recentAllies = { pinBad = false }
     settings.simpleNotes = false
     settings.playerStrip = true
-    settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true }
+    settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true }
     settings.browserWindow = { width = 550, height = 700 }
     addon:GetModule("Browser"):ApplyWindowSize()
     settings.browserColors = {}

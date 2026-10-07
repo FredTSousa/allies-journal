@@ -103,6 +103,46 @@ function Notices:FamiliarFaces(candidates, runId)
     addon:Print(line)
 end
 
+-- At the end of a dungeon: a short recap of the run, from the counters
+-- RosterTracker keeps while you are grouped. Said once per run; skipped for
+-- very short visits.
+Notices.recapShown = {}
+
+local function RecapDuration(seconds)
+    seconds = math.floor(seconds or 0)
+    local h, m = math.floor(seconds / 3600), math.floor(seconds % 3600 / 60)
+    if h > 0 then return string.format("%dh %dm", h, m) end
+    return string.format("%dm", m)
+end
+
+function Notices:RunRecap(candidates, runId)
+    local s = Settings()
+    if not s or not s.runRecap or not runId or self.recapShown[runId] then return end
+    local tracker = addon:GetModule("RosterTracker")
+    local started = tracker.runStart[runId]
+    if not started or #candidates == 0 then return end
+    local seconds = time() - started
+    if seconds < 240 then return end
+    self.recapShown[runId] = true
+
+    local tally = tracker:GetTally(candidates[1].guid, runId)
+    local parts = { RecapDuration(seconds) }
+    local function Add(count, one, many)
+        if (count or 0) > 0 then table.insert(parts, count .. " " .. (count == 1 and one or many)) end
+    end
+    Add(tally.bosses, "boss", "bosses")
+    Add(tally.mobs, "mob", "mobs")
+    Add(tally.quests, "quest", "quests")
+    if (tally.bosses or 0) > 0 and (tally.wipes or 0) == 0 then
+        table.insert(parts, "no wipes")
+    else
+        Add(tally.wipes, "group wipe", "group wipes")
+    end
+
+    addon:Print(string.format("Run recap - %s with %d other%s: %s. |cff40ff40|Haddon:AlliesJournal:runs|h[Open runs]|h|r",
+        tracker:PlaceName() or "the dungeon", #candidates, #candidates == 1 and "" or "s", table.concat(parts, ", ")))
+end
+
 ----------------------------------------------------------------------
 -- Coming online
 ----------------------------------------------------------------------
