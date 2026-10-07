@@ -198,6 +198,7 @@ function RosterTracker:OnEnable()
     -- far"). Guarded: an event this client doesn't know must not break loading.
     pcall(self.RegisterEvent, self, "ENCOUNTER_END", "OnEncounterEnd")
     pcall(self.RegisterEvent, self, "QUEST_TURNED_IN", "OnQuestTurnedIn")
+    pcall(self.RegisterEvent, self, "CHAT_MSG_COMBAT_XP_GAIN", "OnKillExperience")
     -- PARTY_KICKED is intentionally not hooked: the roster diff below
     -- already detects every departure (leave, kick, or disconnect) generically,
     -- and the design explicitly doesn't try to label *why* someone left.
@@ -302,6 +303,13 @@ end
 
 function RosterTracker:OnQuestTurnedIn()
     self:Tally("quests")
+end
+
+-- One of these per mob that dies and gives you experience ("X dies, you gain
+-- N experience"): the one kill signal that doesn't need the combat log, which
+-- this client restricts. So grey mobs and kills you got nothing for don't count.
+function RosterTracker:OnKillExperience()
+    self:Tally("mobs")
 end
 
 function RosterTracker:OnRosterUpdate()
@@ -534,7 +542,7 @@ function RosterTracker:CheckSessionEligibility(candidates, runId)
                     role = c.data.role,
                     dungeon = runId ~= nil,
                     since = c.since,
-                    bosses = tally.bosses, quests = tally.quests, wipes = tally.wipes,
+                    bosses = tally.bosses, quests = tally.quests, wipes = tally.wipes, mobs = tally.mobs,
                     info = c.data,
                     groupedSeconds = groupedSeconds,
                     combatSeconds = combatSeconds,

@@ -1153,6 +1153,7 @@ function Browser:ShowHistory(nameRealm)
         local done = {}
         if stats.dungeons > 0 then table.insert(done, string.format("%d dungeon%s", stats.dungeons, stats.dungeons == 1 and "" or "s")) end
         if stats.bosses > 0 then table.insert(done, string.format("%d boss%s", stats.bosses, stats.bosses == 1 and "" or "es")) end
+        if stats.mobs > 0 then table.insert(done, string.format("%d mob%s", stats.mobs, stats.mobs == 1 and "" or "s")) end
         if stats.quests > 0 then table.insert(done, string.format("%d quest%s", stats.quests, stats.quests == 1 and "" or "s")) end
         local seen = {}
         for _, role in ipairs({ "tank", "healer", "dps" }) do

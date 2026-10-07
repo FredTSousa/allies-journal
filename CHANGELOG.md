@@ -3,10 +3,10 @@
 ## 0.3.3-beta
 
 - `/aj numbers` has more: badges (like Night Owl and On a Roll), your longest streak and active days, a chart of how much you played over time, a comparison with the period before, and a **Copy as text** button for sharing.
-- Each player now shows how you met (level, race and class, where and when, and their guild) and what you did together: dungeons, bosses and quests, plus which role you saw them in. This is saved from now on, so players you already have fill in the next time you group.
+- Each player now shows how you met (level, race and class, where and when, and their guild) and what you did together: dungeons, bosses, mobs and quests, plus which role you saw them in. This is saved from now on, so players you already have fill in the next time you group.
 - Favorites: right-click a card to add or remove one. They get a marker and sort first. The new **Show** filter has Favorites and Online now (it also holds the Recent Allies choices).
 - Search understands `class:priest`, `role:healer`, `guild:name`, `since:14` and `fav:yes`. Hover the search box for the list.
-- `/aj numbers` shows the bosses you defeated and how many group wipes there were along the way.
+- `/aj numbers` shows the bosses and mobs you defeated and how many group wipes there were along the way. Mobs are the ones that gave you experience, so grey mobs do not count.
 - Cleaning up old sessions now keeps their totals, so "Together so far" stays right.
 
 ## 0.3.2-beta
