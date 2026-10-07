@@ -77,8 +77,11 @@ local ROLE_FILTER_LABELS = { All = "All", tank = "Tank", healer = "Healer", dps 
 -- bad = either rating is bad, good = both good, average = any other
 -- reviewed player, none = never reviewed.
 -- Whether Blizzard's Recent Allies has an entry for the player.
-local SOURCE_FILTERS = { "All", "recent", "other" }
-local SOURCE_FILTER_LABELS = { All = "All", recent = "In Recent Allies", other = "Not in Recent Allies" }
+local SOURCE_FILTERS = { "All", "favorites", "online", "recent", "other" }
+local SOURCE_FILTER_LABELS = { All = "All", favorites = "Favorites", online = "Online now",
+    recent = "In Recent Allies", other = "Not in Recent Allies" }
+-- Shown in front of a favorite's name (a raid marker; no heart in the game's art).
+local FAVORITE_MARK = "|TInterface/TargetingFrame/UI-RaidTargetingIcon_3:14|t "
 local RATING_FILTERS = { "All", "good", "average", "bad", "none" }
 local RATING_FILTER_LABELS = { All = "All", good = "Great", average = "Mixed", bad = "Not great", none = "No note" }
 
@@ -730,9 +733,20 @@ function Browser:Refresh()
     viewRow:AddChild(whoBtn)
 
     local search = AceGUI:Create("EditBox")
-    search:SetLabel("Search names and notes")
+    search:SetLabel("Search")
     search:SetText(self.searchText)
     search:SetWidth(140)
+    search:SetCallback("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
+        GameTooltip:SetText("Search", 1, 1, 1)
+        GameTooltip:AddLine("Names, notes, places, class and guild. Several words all have to match.", nil, nil, nil, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("Filters you can type:", 1, 0.82, 0)
+        GameTooltip:AddLine("class:priest   role:healer   guild:name", 0.8, 0.8, 0.8)
+        GameTooltip:AddLine("since:14 (seen in the last 14 days)   fav:yes", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    search:SetCallback("OnLeave", function() GameTooltip:Hide() end)
     search:SetCallback("OnTextChanged", function(widget, event, text)
         self.searchText = text
         self:RefreshList()
@@ -762,7 +776,7 @@ function Browser:Refresh()
     frame:AddChild(ratingDropdown)
 
     local sourceDropdown = AceGUI:Create("Dropdown")
-    sourceDropdown:SetLabel("Recent Allies")
+    sourceDropdown:SetLabel("Show")
     sourceDropdown:SetWidth(130)
     sourceDropdown:SetList(SOURCE_FILTER_LABELS, SOURCE_FILTERS)
     sourceDropdown:SetValue(self.sourceFilter)
@@ -886,19 +900,29 @@ function Browser:RefreshList()
     -- each group.
     local entries = {}
     self.shownNonRecent = {}
-    for _, record in ipairs(addon:SearchPlayers(self.searchText)) do
+    -- For players saved before classes were stored, Recent Allies knows it.
+    local function ClassFileOf(record)
+        local ally = FindRecentAllyInList(recentList, record.nameRealm)
+        local classID = ally and ally.characterData and ally.characterData.classID
+        if not classID then return nil end
+        local ok, info = pcall(C_CreatureInfo.GetClassInfo, classID)
+        return ok and info and info.classFile or nil
+    end
+    for _, record in ipairs(addon:SearchPlayers(self.searchText, ClassFileOf)) do
         local latest = addon:GetLatestReview(record.nameRealm)
         local passesRole = self.roleFilter == "All" or (latest and latest.role == self.roleFilter)
         local passesRating = self.ratingFilter == "All" or ReviewClass(latest) == self.ratingFilter
-        local allyData = FindRecentAllyInList(recentList, record.nameRealm)
-        local passesSource = self.sourceFilter == "All"
-            or (self.sourceFilter == "recent") == (allyData ~= nil)
+        local recentAlly = FindRecentAllyInList(recentList, record.nameRealm)
+        -- Not in Recent Allies: use what a /who check found, if run.
+        local allyData = recentAlly or addon:GetModule("WhoCheck"):GetPseudoAlly(record.nameRealm)
+        local show = self.sourceFilter
+        local passesSource = show == "All"
+            or (show == "favorites" and record.favorite)
+            or (show == "online" and allyData and allyData.stateData and allyData.stateData.isOnline)
+            or (show == "recent" and recentAlly ~= nil)
+            or (show == "other" and recentAlly == nil)
         if passesRole and passesRating and passesSource then
-            -- Not in Recent Allies: use what a /who check found, if run.
-            if not allyData then
-                table.insert(self.shownNonRecent, record.nameRealm)
-                allyData = addon:GetModule("WhoCheck"):GetPseudoAlly(record.nameRealm)
-            end
+            if not recentAlly then table.insert(self.shownNonRecent, record.nameRealm) end
             local presence = 2
             if allyData then
                 presence = (allyData.stateData and allyData.stateData.isOnline) and 0 or 1
@@ -908,6 +932,8 @@ function Browser:RefreshList()
     end
     table.sort(entries, function(x, y)
         if x.presence ~= y.presence then return x.presence < y.presence end
+        local xf, yf = x.record.favorite and 0 or 1, y.record.favorite and 0 or 1
+        if xf ~= yf then return xf < yf end
         local xs = x.record.lastSeen.date or 0
         local ys = y.record.lastSeen.date or 0
         if xs ~= ys then return xs > ys end
@@ -953,7 +979,7 @@ function Browser:RefreshList()
             -- Online status is the card's left bar now, so no status icon here.
             -- [NR] = Not in Recent Allies (whether or not a /who check has
             -- filled in their info since).
-            local nameLine = RoleIconFor(latest and latest.role) .. ColoredShortName(record.nameRealm, allyData)
+            local nameLine = (record.favorite and FAVORITE_MARK or '') .. RoleIconFor(latest and latest.role) .. ColoredShortName(record.nameRealm, allyData)
             if not allyData or allyData.fromWho then
                 nameLine = nameLine .. ' |cff909090[NR]|r'
             end
@@ -1073,6 +1099,11 @@ function Browser:ShowCardMenu(owner, nameRealm)
         for _, action in ipairs(self:PlayerActions(nameRealm)) do
             root:CreateButton(action.text, action.run)
         end
+        local record = addon.db.global.players[nameRealm]
+        root:CreateButton(record and record.favorite and "Remove from favorites" or "Add to favorites", function()
+            addon:ToggleFavorite(nameRealm)
+            self:RefreshList()
+        end)
         root:CreateButton("View history", function() self:ShowHistory(nameRealm) end)
     end)
 end
@@ -1106,24 +1137,60 @@ function Browser:ShowHistory(nameRealm)
     title:SetFullWidth(true)
     detail:AddChild(title)
 
-    -- How much you've played together so far, from the recorded sessions.
-    local sessionList = addon:GetSessionsForPlayer(nameRealm)
-    if #sessionList > 0 then
-        local totalGrouped, first, last = 0, nil, nil
-        for _, recorded in ipairs(sessionList) do
-            totalGrouped = totalGrouped + (recorded.groupedSeconds or 0)
-            local when = recorded.date
-            if when then
-                first = first and math.min(first, when) or when
-                last = last and math.max(last, when) or when
-            end
-        end
+    -- How much you've played together so far, from the recorded sessions
+    -- (plus the totals kept from any that were cleaned up).
+    local stats = addon:GetTogetherStats(nameRealm)
+    local record = addon.db.global.players[nameRealm]
+    if stats.sessions > 0 then
         local together = AceGUI:Create("Label")
         together:SetFullWidth(true)
         together:SetText(string.format("|cffffd100Together so far:|r %d session%s, %s grouped in total  %s(first %s, last %s)|r",
-            #sessionList, #sessionList == 1 and "" or "s", FormatDuration(totalGrouped), GRAY,
-            first and date("%Y-%m-%d", first) or "?", last and date("%Y-%m-%d", last) or "?"))
+            stats.sessions, stats.sessions == 1 and "" or "s", FormatDuration(stats.seconds), GRAY,
+            stats.first and date("%Y-%m-%d", stats.first) or "?", stats.last and date("%Y-%m-%d", stats.last) or "?"))
         detail:AddChild(together)
+
+        -- What you did together, and which role you saw them in.
+        local done = {}
+        if stats.dungeons > 0 then table.insert(done, string.format("%d dungeon%s", stats.dungeons, stats.dungeons == 1 and "" or "s")) end
+        if stats.bosses > 0 then table.insert(done, string.format("%d boss%s", stats.bosses, stats.bosses == 1 and "" or "es")) end
+        if stats.quests > 0 then table.insert(done, string.format("%d quest%s", stats.quests, stats.quests == 1 and "" or "s")) end
+        local seen = {}
+        for _, role in ipairs({ "tank", "healer", "dps" }) do
+            if (stats.roles[role] or 0) > 0 then
+                table.insert(seen, { text = string.format("%s (%d)", ROLE_FILTER_LABELS[role], stats.roles[role]), count = stats.roles[role] })
+            end
+        end
+        table.sort(seen, function(a, b) return a.count > b.count end)
+        local seenText = {}
+        for i, entry in ipairs(seen) do seenText[i] = entry.text end
+        local lines = {}
+        if #done > 0 then table.insert(lines, "Done together: " .. table.concat(done, ", ")) end
+        if #seenText > 0 then table.insert(lines, "Seen as: " .. table.concat(seenText, ", ")) end
+        if #lines > 0 then
+            local extra = AceGUI:Create("Label")
+            extra:SetFullWidth(true)
+            extra:SetText(GRAY .. table.concat(lines, "   -   ") .. "|r")
+            detail:AddChild(extra)
+        end
+    end
+
+    -- How you met: who they were the first time, and where.
+    if record and record.met then
+        local who = {}
+        if record.met.level then table.insert(who, "level " .. record.met.level) end
+        if record.race then table.insert(who, record.race) end
+        if record.class then
+            local name = LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[record.class] or record.class
+            local color = RAID_CLASS_COLORS and RAID_CLASS_COLORS[record.class]
+            table.insert(who, color and color.colorStr and ("|c" .. color.colorStr .. name .. "|r") or name)
+        end
+        local text = "|cffffd100How you met:|r " .. (#who > 0 and (table.concat(who, " ") .. ", ") or "")
+        text = text .. (record.met.zone and ("in " .. record.met.zone .. " ") or "") .. GRAY .. "on " .. date("%Y-%m-%d", record.met.date or time()) .. "|r"
+        if record.guild then text = text .. GRAY .. "   -   Guild: " .. record.guild .. "|r" end
+        local met = AceGUI:Create("Label")
+        met:SetFullWidth(true)
+        met:SetText(text)
+        detail:AddChild(met)
     end
 
 

@@ -295,10 +295,14 @@ function Diary:ShowNumbers(period)
     local totalGrouped, longest = 0, nil
     local byZone, byWeekday, byPart = {}, {}, {}
     local members, weekend = 0, 0
+    local bossTotal, wipeTotal, dungeonRuns = 0, 0, 0
     local dayset = {}
     for _, run in ipairs(runs) do
         totalGrouped = totalGrouped + run.groupedSeconds
         members = members + #run.members
+        bossTotal = bossTotal + (run.bosses or 0)
+        wipeTotal = wipeTotal + (run.wipes or 0)
+        if run.dungeon then dungeonRuns = dungeonRuns + 1 end
         byZone[run.zone] = (byZone[run.zone] or 0) + 1
         local weekday = date("%A", run.date)
         byWeekday[weekday] = (byWeekday[weekday] or 0) + 1
@@ -395,6 +399,11 @@ function Diary:ShowNumbers(period)
     if #runs > 0 then
         table.insert(tiles, { "Average group", string.format("%.1f other players", members / #runs) })
         table.insert(tiles, { "Active days", Plural(#dayList, "day", "days"), "with at least one run" })
+        if dungeonRuns > 0 and bossTotal > 0 then
+            table.insert(tiles, { "Bosses defeated", tostring(bossTotal), wipeTotal > 0
+                and (Plural(wipeTotal, "group wipe", "group wipes") .. " along the way") or "and not a single wipe" })
+            table.insert(facts, "Bosses defeated: " .. bossTotal .. (wipeTotal > 0 and (" (" .. Plural(wipeTotal, "group wipe", "group wipes") .. ")") or " (no wipes)"))
+        end
         if bestStreak >= 2 then
             table.insert(tiles, { "Longest streak", Plural(bestStreak, "day", "days") .. " in a row" })
             table.insert(facts, "Longest streak: " .. Plural(bestStreak, "day", "days") .. " in a row")

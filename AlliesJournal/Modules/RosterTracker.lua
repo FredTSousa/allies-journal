@@ -47,6 +47,11 @@ RosterTracker.runStart = {}       -- runId -> time the run started
 -- dungeon don't produce duplicates. Cleared when the player leaves.
 RosterTracker.handledReview = {}
 RosterTracker.handledSession = {}
+-- guid -> runKey -> { bosses, quests, wipes }: what happened while that person
+-- was in the group, counted per dungeon run (runKey is the run id, or 0 in the
+-- open world) so a second dungeon with the same party stays separate. In
+-- memory, plus the run cache across a /reload.
+RosterTracker.tally = {}
 
 -- Where this grouping happened, for session/review records and the
 -- Browser's "Seen ... - <place>" text. The dungeon/M+ name when we have
@@ -100,6 +105,7 @@ function RosterTracker:OnLogout()
             handledReview = handledReview,
             handledSession = handledSession,
             cycles = addon:GetModule("ReviewCapture"):ExportRun(runId),
+            tally = self.tally,
         }
     end)
     if ok then db.runCache = cache end
@@ -132,6 +138,16 @@ function RosterTracker:TryRestoreRun()
     end
     for guid in pairs(cache.handledReview or {}) do MarkHandled(self.handledReview, guid, runId) end
     for guid in pairs(cache.handledSession or {}) do MarkHandled(self.handledSession, guid, runId) end
+
+    for guid, byRun in pairs(cache.tally or {}) do
+        local mine = self.tally[guid] or {}
+        self.tally[guid] = mine
+        for key, counts in pairs(byRun) do
+            local existing = mine[key] or {}
+            mine[key] = existing
+            for field, value in pairs(counts) do existing[field] = math.max(existing[field] or 0, value) end
+        end
+    end
 
     addon:GetModule("ReviewCapture"):ImportRun(cache.cycles or {}, runId)
     return true
@@ -178,6 +194,10 @@ function RosterTracker:OnEnable()
     -- Fires on logout and on /reload, just before the saved variables are
     -- written - the moment to save a dungeon run in progress.
     self:RegisterEvent("PLAYER_LOGOUT", "OnLogout")
+    -- Boss kills, wipes and quests handed in while grouped (for "together so
+    -- far"). Guarded: an event this client doesn't know must not break loading.
+    pcall(self.RegisterEvent, self, "ENCOUNTER_END", "OnEncounterEnd")
+    pcall(self.RegisterEvent, self, "QUEST_TURNED_IN", "OnQuestTurnedIn")
     -- PARTY_KICKED is intentionally not hooked: the roster diff below
     -- already detects every departure (leave, kick, or disconnect) generically,
     -- and the design explicitly doesn't try to label *why* someone left.
@@ -230,6 +250,60 @@ local function IterateGroupUnits()
     return units
 end
 
+-- Class, race, level and guild of a grouped unit, for the "how you met" line.
+-- Anything the client won't give (secret, or not loaded yet) keeps the value
+-- from the last update.
+local function Readable(value)
+    if value ~= nil and issecretvalue and issecretvalue(value) then return nil end
+    return value
+end
+
+local function UnitDetails(unit, previous)
+    local out = {
+        class = previous and previous.class, race = previous and previous.race,
+        level = previous and previous.level, guild = previous and previous.guild,
+    }
+    local okClass, _, classFile = pcall(UnitClass, unit)
+    if okClass and Readable(classFile) then out.class = classFile end
+    local okRace, race = pcall(UnitRace, unit)
+    if okRace and Readable(race) then out.race = race end
+    local okLevel, level = pcall(UnitLevel, unit)
+    level = okLevel and Readable(level)
+    if level and level > 0 then out.level = level end
+    local okGuild, guild = pcall(GetGuildInfo, unit)
+    if okGuild and Readable(guild) and guild ~= "" then out.guild = guild end
+    return out
+end
+
+-- Counts a boss kill, a wipe or a quest hand-in for everyone in the group.
+-- Raids are left out: they never produce sessions.
+function RosterTracker:Tally(field)
+    if self:InRaidContext() then return end
+    local key = self.currentRunId or 0
+    for guid in pairs(self.roster) do
+        local byRun = self.tally[guid]
+        if not byRun then byRun = {}; self.tally[guid] = byRun end
+        local counts = byRun[key]
+        if not counts then counts = {}; byRun[key] = counts end
+        counts[field] = (counts[field] or 0) + 1
+    end
+end
+
+function RosterTracker:GetTally(guid, runId)
+    local byRun = self.tally[guid]
+    return byRun and byRun[runId or 0] or {}
+end
+
+function RosterTracker:OnEncounterEnd(_, _, _, _, _, success)
+    pcall(function()
+        if success == 1 then self:Tally("bosses") elseif success == 0 then self:Tally("wipes") end
+    end)
+end
+
+function RosterTracker:OnQuestTurnedIn()
+    self:Tally("quests")
+end
+
 function RosterTracker:OnRosterUpdate()
     local capture = addon:GetModule("ReviewCapture")
     local playerGUID = UnitGUID("player")
@@ -247,10 +321,13 @@ function RosterTracker:OnRosterUpdate()
         if guid and guid ~= playerGUID then
             local nameRealm = addon:GetFullName(unit)
             if nameRealm then
+                local details = UnitDetails(unit, self.roster[guid])
                 newRoster[guid] = {
                     nameRealm = nameRealm,
                     unit = unit,
                     role = capture:GetRole(unit),
+                    class = details.class, race = details.race,
+                    level = details.level, guild = details.guild,
                 }
                 -- track groupedSince per GUID from first appearance in the roster
                 if not self.groupedSince[guid] then
@@ -362,6 +439,7 @@ function RosterTracker:OnRosterUpdate()
         self.groupedSince[d.guid] = nil
         self.sessionRecorded[d.guid] = nil
         self.reviewQueued[d.guid] = nil
+        self.tally[d.guid] = nil
         self.handledReview[d.guid] = nil
         self.handledSession[d.guid] = nil
         capture:ClearCombatSeconds(d.guid)
@@ -450,8 +528,14 @@ function RosterTracker:CheckSessionEligibility(candidates, runId)
 
             if groupedSeconds >= minGrouped and combatSeconds >= minCombat then
                 local aggregate = capture:AggregateFights(capture:GetRunFights(c.guid, runId))
+                local tally = self:GetTally(c.guid, runId)
                 addon:AddSession(c.data.nameRealm, {
                     zone = self:PlaceName(),
+                    role = c.data.role,
+                    dungeon = runId ~= nil,
+                    since = c.since,
+                    bosses = tally.bosses, quests = tally.quests, wipes = tally.wipes,
+                    info = c.data,
                     groupedSeconds = groupedSeconds,
                     combatSeconds = combatSeconds,
                     dps = aggregate.dps,

@@ -477,6 +477,7 @@ function addon:GetRuns()
             current = {
                 id = "run" .. s.date, date = s.date, zone = zone, lastDate = s.date,
                 members = {}, sessionIds = {}, groupedSeconds = 0, combatSeconds = 0,
+                bosses = 0, wipes = 0,
             }
             table.insert(runs, current)
         end
@@ -485,6 +486,9 @@ function addon:GetRuns()
         current.sessionIds[item.id] = true
         current.groupedSeconds = math.max(current.groupedSeconds, s.groupedSeconds or 0)
         current.combatSeconds = math.max(current.combatSeconds, s.combatSeconds or 0)
+        current.bosses = math.max(current.bosses, s.bosses or 0)
+        current.wipes = math.max(current.wipes, s.wipes or 0)
+        current.dungeon = current.dungeon or s.dungeon
     end
 
     local notes = g.runNotes or {}
@@ -581,19 +585,67 @@ function addon:GetAllKnownPlayers()
     return list
 end
 
+-- Search words that act as filters: class:priest role:healer guild:name
+-- since:14 (seen in the last 14 days) fav:yes. Anything else is plain text.
+local CLASS_ALIASES = {
+    dk = "deathknight", ["death"] = "deathknight", dh = "demonhunter", lock = "warlock",
+    pally = "paladin", sham = "shaman", dru = "druid", pri = "priest", war = "warrior",
+}
+local ROLE_ALIASES = { heal = "healer", healer = "healer", tank = "tank", dps = "dps", damage = "dps" }
+local FILTER_KEYS = { class = true, role = true, guild = true, since = true, fav = true, favorite = true }
+
+function addon:GetPlayerRoles(nameRealm)
+    local roles = {}
+    local latest = self:GetLatestReview(nameRealm)
+    if latest and latest.role then roles[latest.role] = true end
+    for _, session in ipairs(self:GetSessionsForPlayer(nameRealm)) do
+        if session.role then roles[session.role] = true end
+    end
+    return roles
+end
+
 -- Matches the name, the places you played together and everything you wrote
 -- in your notes. Several words all have to match (in any order, anywhere),
 -- so "funny healer" finds a note that says "funny" and one that says "healer".
-function addon:SearchPlayers(query)
+-- classOf(record) may supply a class for players saved before classes were
+-- stored (the browser passes one that asks Recent Allies).
+function addon:SearchPlayers(query, classOf)
     query = query and strtrim(query:lower()) or ""
-    local words = {}
-    for word in query:gmatch("%S+") do table.insert(words, word) end
+    local words, filters = {}, {}
+    for word in query:gmatch("%S+") do
+        local key, value = word:match("^(%a+):(.+)$")
+        if key and FILTER_KEYS[key] then
+            table.insert(filters, { key = key, value = value })
+        else
+            table.insert(words, word)
+        end
+    end
 
     local list = {}
     for _, record in ipairs(self:GetAllKnownPlayers()) do
         local matches = true
-        if #words > 0 then
+        for _, filter in ipairs(filters) do
+            local key, value = filter.key, filter.value
+            if key == "class" then
+                local classFile = (record.class or (classOf and classOf(record)) or ""):lower()
+                value = CLASS_ALIASES[value] or value
+                matches = classFile:find(value, 1, true) ~= nil
+            elseif key == "role" then
+                matches = self:GetPlayerRoles(record.nameRealm)[ROLE_ALIASES[value] or value] == true
+            elseif key == "guild" then
+                matches = (record.guild or ""):lower():find(value, 1, true) ~= nil
+            elseif key == "since" then
+                local days = tonumber(value)
+                matches = days ~= nil and ((record.lastSeen and record.lastSeen.date) or 0) >= time() - days * 86400
+            else -- fav / favorite
+                matches = (record.favorite and true or false) == (value ~= "no" and value ~= "false" and value ~= "0")
+            end
+            if not matches then break end
+        end
+        if matches and #words > 0 then
             local parts = { record.nameRealm:lower() }
+            if record.class then table.insert(parts, record.class:lower()) end
+            if record.guild then table.insert(parts, record.guild:lower()) end
             local zone = record.lastSeen and record.lastSeen.zone
             if zone then table.insert(parts, zone:lower()) end
             for _, review in ipairs(self:GetReviewsForPlayer(record.nameRealm)) do
@@ -648,13 +700,89 @@ function addon:AddSession(nameRealm, sessionData)
         interrupts = sessionData.interrupts,
         dispels = sessionData.dispels,
         deaths = sessionData.deaths,
+        -- What happened while grouped; small numbers, left out when zero.
+        role = sessionData.role,
+        dungeon = sessionData.dungeon and true or nil,
+        bosses = (sessionData.bosses or 0) > 0 and sessionData.bosses or nil,
+        quests = (sessionData.quests or 0) > 0 and sessionData.quests or nil,
+        wipes = (sessionData.wipes or 0) > 0 and sessionData.wipes or nil,
     }
 
     self.db.global.sessions[id] = session
     table.insert(record.sessions, id)
     self:UpdateLastSeen(nameRealm, sessionData.zone)
 
+    -- Who they are (latest seen) and how you met (set once, the first time).
+    local info = sessionData.info
+    if info then
+        if info.class then record.class = info.class end
+        if info.race then record.race = info.race end
+        if info.level then record.level = info.level end
+        if info.guild then record.guild = info.guild end
+    end
+    if not record.met then
+        record.met = { date = sessionData.since or time(), zone = sessionData.zone, level = info and info.level or nil }
+    end
+
     return session
+end
+
+-- Adds a session's numbers to the totals kept on the player before it is
+-- deleted, so "Together so far" stays right after a clean-up.
+function addon:ArchiveSession(record, session)
+    local archive = record.archive
+    if not archive then archive = {}; record.archive = archive end
+    archive.sessions = (archive.sessions or 0) + 1
+    archive.seconds = (archive.seconds or 0) + (session.groupedSeconds or 0)
+    if session.dungeon then archive.dungeons = (archive.dungeons or 0) + 1 end
+    archive.bosses = (archive.bosses or 0) + (session.bosses or 0)
+    archive.quests = (archive.quests or 0) + (session.quests or 0)
+    if session.role then
+        archive.roles = archive.roles or {}
+        archive.roles[session.role] = (archive.roles[session.role] or 0) + 1
+    end
+    if session.date then
+        archive.first = archive.first and math.min(archive.first, session.date) or session.date
+        archive.last = archive.last and math.max(archive.last, session.date) or session.date
+    end
+end
+
+-- Totals for the "Together so far" lines: every recorded session plus the
+-- totals kept from sessions that were cleaned up.
+function addon:GetTogetherStats(nameRealm)
+    local stats = { sessions = 0, seconds = 0, dungeons = 0, bosses = 0, quests = 0, roles = {} }
+    local record = self.db.global.players[nameRealm]
+    if not record then return stats end
+    local archive = record.archive
+    if archive then
+        stats.sessions = archive.sessions or 0
+        stats.seconds = archive.seconds or 0
+        stats.dungeons = archive.dungeons or 0
+        stats.bosses = archive.bosses or 0
+        stats.quests = archive.quests or 0
+        stats.first, stats.last = archive.first, archive.last
+        for role, count in pairs(archive.roles or {}) do stats.roles[role] = count end
+    end
+    for _, session in ipairs(self:GetSessionsForPlayer(nameRealm)) do
+        stats.sessions = stats.sessions + 1
+        stats.seconds = stats.seconds + (session.groupedSeconds or 0)
+        if session.dungeon then stats.dungeons = stats.dungeons + 1 end
+        stats.bosses = stats.bosses + (session.bosses or 0)
+        stats.quests = stats.quests + (session.quests or 0)
+        if session.role then stats.roles[session.role] = (stats.roles[session.role] or 0) + 1 end
+        if session.date then
+            stats.first = stats.first and math.min(stats.first, session.date) or session.date
+            stats.last = stats.last and math.max(stats.last, session.date) or session.date
+        end
+    end
+    return stats
+end
+
+function addon:ToggleFavorite(nameRealm)
+    local record = self.db.global.players[nameRealm]
+    if not record then return nil end
+    record.favorite = (not record.favorite) or nil
+    return record.favorite
 end
 
 function addon:DeleteSession(nameRealm, id)
@@ -1012,7 +1140,10 @@ function addon:PreviewSessionCleanup(daysThreshold)
 end
 
 function addon:ApplySessionCleanup(eligible)
+    local g = self.db.global
     for _, entry in ipairs(eligible) do
+        local record, session = g.players[entry.nameRealm], g.sessions[entry.id]
+        if record and session then self:ArchiveSession(record, session) end
         self:DeleteSession(entry.nameRealm, entry.id)
     end
     return #eligible
