@@ -228,7 +228,7 @@ end
 -- Adds each match's inner frame to `activeFrames` so the caller can hide
 -- badges on frames that stop matching. Returns the number of badges
 -- shown, for debug counting.
-local function UpdateRowBadge(row, textCounter, activeFrames)
+local function UpdateRowBadge(row, textCounter, activeFrames, noLocation)
     local entries = {}
     CollectFontStrings(row, 0, entries)
     if textCounter then textCounter[1] = textCounter[1] + #entries end
@@ -255,7 +255,7 @@ local function UpdateRowBadge(row, textCounter, activeFrames)
 
                     -- The leader's current area, shown on the row.
                     local area
-                    if addon.db.global.settings.lfg.showLocation then
+                    if addon.db.global.settings.lfg.showLocation and not noLocation then
                         local okLeader, leader = pcall(C_LFGList.GetSearchResultLeaderInfo, resultID)
                         if okLeader and type(leader) == "table" and leader.areaName and leader.areaName ~= "" then
                             area = leader.areaName
@@ -313,12 +313,64 @@ local function UpdateRowBadge(row, textCounter, activeFrames)
     return ok and shown or 0
 end
 
+-- The "LFG Forever" addon opens its own Group Finder window (a global frame,
+-- LFGForeverFrame) whose list uses the same row template as Blizzard's, so the
+-- same row updater works on it. Silent when that addon isn't installed. Its
+-- window shows each listing's zone itself, so the location text is skipped.
+local function FindScrollBoxes(frame, depth, out)
+    if depth > 6 or not frame or not frame.GetChildren then return end
+    if frame.IsForbidden and frame:IsForbidden() then return end
+    for _, child in ipairs({ frame:GetChildren() }) do
+        local box = child.ScrollBox
+        if type(box) == "table" and box.GetChildren then out[#out + 1] = box end
+        FindScrollBoxes(child, depth + 1, out)
+    end
+end
+
+function LFGAnnotate:ScanForever()
+    local window = _G["LFGForeverFrame"]
+    if not window or not window.IsShown or not window:IsShown() then return end
+
+    if not self.foreverBoxes or #self.foreverBoxes == 0 then
+        self.foreverBoxes = {}
+        FindScrollBoxes(window, 0, self.foreverBoxes)
+        self.foreverHooked = {}
+    end
+
+    local activeFrames = {}
+    for _, box in ipairs(self.foreverBoxes) do
+        if box.IsVisible and box:IsVisible() then
+            if not self.foreverHooked[box] then
+                self.foreverHooked[box] = true
+                pcall(function()
+                    if box.RegisterCallback and ScrollBoxListViewMixin and ScrollBoxListViewMixin.Event
+                        and ScrollBoxListViewMixin.Event.OnAcquiredFrame then
+                        box:RegisterCallback(ScrollBoxListViewMixin.Event.OnAcquiredFrame, function()
+                            pcall(LFGAnnotate.ScanForever, LFGAnnotate)
+                        end, LFGAnnotate)
+                    end
+                end)
+            end
+            local ok, rows = pcall(function() return { box:GetChildren() } end)
+            if ok then
+                for _, row in ipairs(rows) do UpdateRowBadge(row, nil, activeFrames, true) end
+            end
+        end
+    end
+
+    for frame in pairs(self.foreverPreviousActive or {}) do
+        if not activeFrames[frame] then addon:HideReviewBadge(frame) end
+    end
+    self.foreverPreviousActive = activeFrames
+end
+
 -- No longer takes a forceRebuildIndex param - that existed to gate an
 -- O(total active results) prebuild step which resultID-on-frame reading
 -- (see UpdateRowBadge) made unnecessary. Callers that still pass an
 -- argument (the ticker, LFG_LIST_SEARCH_RESULTS_RECEIVED) are harmless -
 -- Lua just ignores the extra value.
 function LFGAnnotate:ScanBrowseResults()
+    pcall(self.ScanForever, self)
     local scrollBox = _G["LFGBrowseFrameScrollBox"]
     if not scrollBox then
         if self.debug then addon:Print("[lfg debug] LFGBrowseFrameScrollBox not found") end

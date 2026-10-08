@@ -10,6 +10,7 @@
 - Cleaning up old sessions now keeps their totals, so "Together so far" stays right.
 - A player's detail also shows the interrupts and dispels they did while you were grouped.
 - At the end of a dungeon, a short recap line in chat: how long it took, bosses, mobs, quests and group wipes, with a link to your runs. It can be switched off in `/aj options`.
+- Works with the "LFG Forever" addon: the star and journal tooltip also show in its Group Finder window.
 - Automatic backup: a safety copy of your notes and history is kept inside the saved data about every 12 hours (the last three), with a Restore button in `/aj options` (General tab) and `/aj backup` to make one now. It stays on your computer. If the journal ever holds far less than the newest backup, a line in chat tells you.
 - A small colored star in front of what players you have a note on say in chat. Hover it to read your note, click it to open them in your journal. It can be switched off in the options.
 - Optional warning on screen, with a sound, when someone you noted as Not for me joins your group (off by default).
