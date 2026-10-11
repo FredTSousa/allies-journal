@@ -6,7 +6,10 @@ local ChatMarkers = addon:NewModule("ChatMarkers")
 -- it opens that player in your journal. Display only: it changes how the line
 -- is drawn, nothing else. Switchable in /aj options.
 
-local ICON = "Interface/COMMON/FavoritesIcon"
+-- A plain one-picture star (the raid marker). The favorites icon used before is a
+-- sheet of two pictures, so squeezed into one square it showed a star and a box.
+local ICON = "Interface/TargetingFrame/UI-RaidTargetingIcon_1"
+local SIZE = 16
 local EVENTS = {
     "CHAT_MSG_SAY", "CHAT_MSG_YELL", "CHAT_MSG_PARTY", "CHAT_MSG_PARTY_LEADER",
     "CHAT_MSG_RAID", "CHAT_MSG_RAID_LEADER", "CHAT_MSG_INSTANCE_CHAT",
@@ -16,8 +19,8 @@ local EVENTS = {
 
 local function Marker(nameRealm, review)
     local r, g, b = addon:GetWorstRatingRGB(review)
-    return string.format("|Haddon:AlliesJournal:player:%s|h|T%s:12:12:0:0:1:1:0:1:0:1:%d:%d:%d|t|h ",
-        nameRealm, ICON, math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
+    return string.format("|Haddon:AlliesJournal:player:%s|h|T%s:%d:%d:0:0:1:1:0:1:0:1:%d:%d:%d|t|h ",
+        nameRealm, ICON, SIZE, SIZE, math.floor(r * 255 + 0.5), math.floor(g * 255 + 0.5), math.floor(b * 255 + 0.5))
 end
 
 -- The line with the marker in front, or nil to leave it alone.
