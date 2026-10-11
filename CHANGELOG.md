@@ -2,18 +2,15 @@
 
 ## 0.3.3-beta
 
-- `/aj numbers` has more: badges (like Night Owl and On a Roll), your longest streak and active days, a chart of how much you played over time, a comparison with the period before, and a **Copy as text** button for sharing.
-- Each player now shows how you met (level, race and class, where and when, and their guild) and what you did together: dungeons, bosses, mobs and quests, plus which role you saw them in. This is saved from now on, so players you already have fill in the next time you group.
-- Favorites: right-click a card to add or remove one. They get a marker and sort first. The new **Show** filter has Favorites and Online now (it also holds the Recent Allies choices).
-- Search understands `class:priest`, `role:healer`, `guild:name`, `since:14` and `fav:yes`. Hover the search box for the list.
-- `/aj numbers` shows the bosses and mobs you defeated and how many group wipes there were along the way. Mobs are the ones that gave you experience, so grey mobs do not count.
-- Cleaning up old sessions now keeps their totals, so "Together so far" stays right.
-- A player's detail also shows the interrupts and dispels they did while you were grouped.
-- At the end of a dungeon, a short recap line in chat: how long it took, bosses, mobs, quests and group wipes, with a link to your runs. It can be switched off in `/aj options`.
-- Works with the "LFG Forever" addon: the star and journal tooltip also show in its Group Finder window.
-- Automatic backup: a safety copy of your notes and history is kept inside the saved data about every 12 hours (the last three), with a Restore button in `/aj options` (General tab) and `/aj backup` to make one now. It stays on your computer. If the journal ever holds far less than the newest backup, a line in chat tells you.
-- A small colored star in front of what players you have a note on say in chat. Hover it to read your note, click it to open them in your journal. It can be switched off in the options.
-- Optional warning on screen, with a sound, when someone you noted as Not for me joins your group (off by default).
+- **Backup:** a safety copy of your journal is kept on your computer every 12 hours (the last three). Restore one in `/aj options`, General tab, or make one now with `/aj backup`.
+- **More on every player:** how you met (level, race, class, where, their guild), what you did together (dungeons, bosses, mobs, quests), the role you saw them in, and their interrupts and dispels. This is saved from now on, so players you already have fill in as you group with them again.
+- **Favorites** (right-click a card) and a new **Show** filter: Favorites, Online now, Recent Allies. Search understands `class:`, `role:`, `guild:`, `since:` and `fav:`.
+- **`/aj numbers`** has badges, streaks, an activity chart, a comparison with the period before, bosses, mobs and wipes, and a Copy as text button.
+- **Run recap:** one chat line at the end of a dungeon with the time, bosses, mobs, quests and wipes.
+- **A small star in chat** in front of what players you have a note on say. Hover it to read your note, click it to open them in your journal.
+- **Optional warning** on screen, with a sound, when someone you noted as Not for me joins your group.
+- **Works with LFG Forever:** the star and journal tooltip also show in its Group Finder window.
+- Cleaning up old sessions now keeps their totals.
 
 ## 0.3.2-beta
 
