@@ -320,6 +320,7 @@ end
 -- Debug dumps and fake-data generators: kept, but only usable with
 -- developer tools on, so they don't clutter the normal command list.
 local DEV_COMMANDS = {
+    chatstar = true,
     test = true,
     testgroup = true,
     testbatch = true,
@@ -442,6 +443,8 @@ function AlliesJournal:SlashCommand(input)
     elseif cmd == "backup" then
         local entry = self:GetModule("Backup"):Snapshot("manual")
         self:Print("Backed up your journal: " .. self:GetModule("Backup"):Describe(entry) .. ". Restore from /aj options.")
+    elseif cmd == "chatstar" then
+        self:GetModule("ChatMarkers"):Preview()
     elseif cmd == "runs" then
         self:GetModule("Diary"):ShowRuns()
     elseif cmd == "numbers" then

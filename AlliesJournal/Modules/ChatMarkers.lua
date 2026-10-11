@@ -62,6 +62,25 @@ local function OnHyperlinkLeave()
     GameTooltip:Hide()
 end
 
+-- Developer test (/aj chatstar): prints one sample line for every few players
+-- with a note, drawn exactly like a real chat line, so the star, its color,
+-- the hover tooltip and the click can be checked without anyone speaking.
+function ChatMarkers:Preview()
+    local shown = 0
+    for nameRealm, record in pairs(addon.db.global.players) do
+        if #record.reviews > 0 then
+            local review = addon:GetLatestReview(nameRealm)
+            if review then
+                addon:Print(string.format("[%s]: %sthis is how %s's chat line looks", addon:GetShortName(nameRealm),
+                    Marker(nameRealm, review), addon:GetShortName(nameRealm)))
+                shown = shown + 1
+                if shown >= 4 then return end
+            end
+        end
+    end
+    if shown == 0 then addon:Print("No player with a note yet to show a sample for.") end
+end
+
 function ChatMarkers:OnEnable()
     for _, event in ipairs(EVENTS) do
         pcall(ChatFrame_AddMessageEventFilter, event, Filter)
