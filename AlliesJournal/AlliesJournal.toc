@@ -34,6 +34,8 @@ Modules\WhoCheck.lua
 Modules\Notices.lua
 Modules\ChatMarkers.lua
 Modules\Backup.lua
+Modules\Trades.lua
+Modules\Nearby.lua
 Modules\Diary.lua
 Modules\Options.lua
 Modules\MinimapButton.lua

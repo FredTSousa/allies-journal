@@ -583,3 +583,81 @@ function Diary:ShowNumbers(period)
 
     shareText = table.concat(share, "\n")
 end
+
+----------------------------------------------------------------------
+-- Seen nearby (opt-in, see Nearby.lua)
+----------------------------------------------------------------------
+
+local function Ago(seconds)
+    if seconds < 3600 then return math.max(1, math.floor(seconds / 60)) .. "m ago" end
+    if seconds < 86400 then return math.floor(seconds / 3600) .. "h ago" end
+    return math.floor(seconds / 86400) .. "d ago"
+end
+
+function Diary:ShowNearby()
+    local Nearby = addon:GetModule("Nearby")
+    local frame = OpenWindow(self, "nearbyFrame", "Allies Journal - Seen nearby", 500, 560)
+    local scroll = AceGUI:Create("ScrollFrame")
+    scroll:SetLayout("List")
+    frame:AddChild(scroll)
+
+    local settings = addon.db.global.settings.nearby
+    local toggle = AceGUI:Create("CheckBox")
+    toggle:SetLabel("Remember players I pass in the open world")
+    toggle:SetValue(Nearby:IsEnabled())
+    toggle:SetFullWidth(true)
+    toggle:SetCallback("OnValueChanged", function(_, _, value)
+        settings.enabled = value and true or false
+        C_Timer.After(0, function() self:ShowNearby() end)
+    end)
+    scroll:AddChild(toggle)
+    AddLabel(scroll, GRAY .. "Friendly players only, outside instances, kept on your computer for 7 days (at most 400). Only their name, level, class, race and the zone are saved - never chat or positions. Add a note on someone to keep them in your journal; people already in it are not listed.|r")
+
+    if not Nearby:IsEnabled() then return end
+
+    local list = Nearby:GetList()
+    if #list == 0 then
+        AddLabel(scroll, " ")
+        AddLabel(scroll, GRAY .. "Nobody yet. Players you pass in the world show up here.|r")
+        return
+    end
+
+    AddHeading(scroll)
+    for _, item in ipairs(list) do
+        local e = item.entry
+        local row = AceGUI:Create("SimpleGroup")
+        row:SetFullWidth(true)
+        row:SetLayout("Flow")
+
+        local color = e.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[e.class]
+        local name = addon:GetShortName(item.nameRealm)
+        if color and color.colorStr then name = "|c" .. color.colorStr .. name .. "|r" end
+        local className = e.class and LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[e.class] or e.class
+        local details = {}
+        if e.level then table.insert(details, "Lvl " .. e.level) end
+        if className then table.insert(details, className) end
+        if e.zone then table.insert(details, e.zone) end
+        table.insert(details, Ago(time() - (e.last or 0)) .. (e.count and e.count > 1 and (" (" .. e.count .. " times)") or ""))
+
+        local label = AceGUI:Create("Label")
+        label:SetRelativeWidth(0.74)
+        label:SetText(name .. "\n" .. GRAY .. table.concat(details, "  -  ") .. "|r")
+        row:AddChild(label)
+
+        local add = AceGUI:Create("Button")
+        add:SetText("Add note")
+        add:SetRelativeWidth(0.24)
+        add:SetCallback("OnClick", function() addon:DoQueueNameForReview(item.nameRealm) end)
+        row:AddChild(add)
+        scroll:AddChild(row)
+    end
+
+    local clear = AceGUI:Create("Button")
+    clear:SetText("Clear this list")
+    clear:SetWidth(160)
+    clear:SetCallback("OnClick", function()
+        Nearby:Clear()
+        C_Timer.After(0, function() self:ShowNearby() end)
+    end)
+    scroll:AddChild(clear)
+end

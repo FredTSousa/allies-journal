@@ -52,6 +52,14 @@ function Backup:Snapshot(reason)
     local g = addon.db.global
     local data = {}
     for _, key in ipairs(KEYS) do data[key] = DeepCopy(g[key] or {}) end
+    -- Demo people are never part of a backup.
+    for nameRealm, rec in pairs(data.players) do
+        if rec.demo then
+            for _, id in ipairs(rec.reviews or {}) do data.reviews[id] = nil end
+            for _, id in ipairs(rec.sessions or {}) do data.sessions[id] = nil end
+            data.players[nameRealm] = nil
+        end
+    end
     local entry = { savedAt = time(), reason = reason or "automatic", counts = Counts(data), data = data }
     local list = self:List()
     table.insert(list, 1, entry)
@@ -117,6 +125,9 @@ StaticPopupDialogs["ALLIESJOURNAL_RESTORE_BACKUP"] = {
 }
 
 function Backup:OnEnable()
+    -- Demo people last until you log out (or reload).
+    self:RegisterEvent("PLAYER_LOGOUT", function() pcall(addon.SetDemo, addon, false) end)
+    C_Timer.After(1, function() pcall(addon.SetDemo, addon, false) end)
     C_Timer.After(10, function() self:RunAutomatic() end)
     C_Timer.NewTicker(3600, function() self:RunAutomatic() end)
 end

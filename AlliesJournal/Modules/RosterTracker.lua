@@ -543,6 +543,7 @@ function RosterTracker:CheckSessionEligibility(candidates, runId)
                 addon:AddSession(c.data.nameRealm, {
                     zone = self:PlaceName(),
                     role = c.data.role,
+                    character = addon:GetShortName(addon:GetPlayerName()),
                     dungeon = runId ~= nil,
                     since = c.since,
                     bosses = tally.bosses, quests = tally.quests, wipes = tally.wipes, mobs = tally.mobs,
@@ -574,6 +575,8 @@ end
 -- complete) so a fresh role read is possible; false when the player has
 -- already left the group (leave/kick), where only the last cached read exists.
 function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
+    -- "Pause recording": no new sessions and no automatic note windows.
+    if addon.db.global.settings.paused then return end
     self:CheckSessionEligibility(candidates, runId)
 
     local capture = addon:GetModule("ReviewCapture")

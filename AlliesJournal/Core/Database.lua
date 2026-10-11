@@ -593,7 +593,7 @@ local CLASS_ALIASES = {
     pally = "paladin", sham = "shaman", dru = "druid", pri = "priest", war = "warrior",
 }
 local ROLE_ALIASES = { heal = "healer", healer = "healer", tank = "tank", dps = "dps", damage = "dps" }
-local FILTER_KEYS = { class = true, role = true, guild = true, since = true, fav = true, favorite = true }
+local FILTER_KEYS = { class = true, role = true, guild = true, since = true, fav = true, favorite = true, tag = true }
 
 function addon:GetPlayerRoles(nameRealm)
     local roles = {}
@@ -635,6 +635,11 @@ function addon:SearchPlayers(query, classOf)
                 matches = self:GetPlayerRoles(record.nameRealm)[ROLE_ALIASES[value] or value] == true
             elseif key == "guild" then
                 matches = (record.guild or ""):lower():find(value, 1, true) ~= nil
+            elseif key == "tag" then
+                matches = false
+                for tag in pairs(record.tags or {}) do
+                    if tag:lower():find(value, 1, true) then matches = true break end
+                end
             elseif key == "since" then
                 local days = tonumber(value)
                 matches = days ~= nil and ((record.lastSeen and record.lastSeen.date) or 0) >= time() - days * 86400
@@ -647,6 +652,8 @@ function addon:SearchPlayers(query, classOf)
             local parts = { record.nameRealm:lower() }
             if record.class then table.insert(parts, record.class:lower()) end
             if record.guild then table.insert(parts, record.guild:lower()) end
+            if record.nickname then table.insert(parts, record.nickname:lower()) end
+            for tag in pairs(record.tags or {}) do table.insert(parts, tag:lower()) end
             local zone = record.lastSeen and record.lastSeen.zone
             if zone then table.insert(parts, zone:lower()) end
             for _, review in ipairs(self:GetReviewsForPlayer(record.nameRealm)) do
@@ -703,6 +710,7 @@ function addon:AddSession(nameRealm, sessionData)
         deaths = sessionData.deaths,
         -- What happened while grouped; small numbers, left out when zero.
         role = sessionData.role,
+        character = sessionData.character,
         dungeon = sessionData.dungeon and true or nil,
         bosses = (sessionData.bosses or 0) > 0 and sessionData.bosses or nil,
         quests = (sessionData.quests or 0) > 0 and sessionData.quests or nil,
@@ -723,7 +731,8 @@ function addon:AddSession(nameRealm, sessionData)
         if info.guild then record.guild = info.guild end
     end
     if not record.met then
-        record.met = { date = sessionData.since or time(), zone = sessionData.zone, level = info and info.level or nil }
+        record.met = { date = sessionData.since or time(), zone = sessionData.zone, level = info and info.level or nil,
+            character = sessionData.character }
     end
 
     return session
@@ -787,6 +796,192 @@ function addon:GetTogetherStats(nameRealm)
         end
     end
     return stats
+end
+
+-- Tags are private labels on a player. A short built-in list plus your own.
+addon.PRESET_TAGS = { "Helpful", "Friendly", "Funny", "Patient", "Good teacher", "Quest buddy", "Run again", "Avoid" }
+
+function addon:GetAllTags()
+    local tags, seen = {}, {}
+    for _, tag in ipairs(self.PRESET_TAGS) do tags[#tags + 1] = tag; seen[tag:lower()] = true end
+    for _, tag in ipairs(self.db.global.settings.customTags or {}) do
+        if not seen[tag:lower()] then tags[#tags + 1] = tag; seen[tag:lower()] = true end
+    end
+    return tags
+end
+
+-- Adds a tag of your own to the list; returns its final spelling, or nil.
+function addon:AddCustomTag(text)
+    text = strtrim(text or "")
+    if text == "" then return nil end
+    text = text:sub(1, 24)
+    for _, tag in ipairs(self:GetAllTags()) do
+        if tag:lower() == text:lower() then return tag end
+    end
+    local settings = self.db.global.settings
+    settings.customTags = settings.customTags or {}
+    table.insert(settings.customTags, text)
+    return text
+end
+
+function addon:SetTag(nameRealm, tag, on)
+    local record = self.db.global.players[nameRealm]
+    if not record or not tag then return end
+    record.tags = record.tags or {}
+    record.tags[tag] = on and true or nil
+    if next(record.tags) == nil then record.tags = nil end
+end
+
+-- "Helpful, Run again" (at most maxShown, then "+N"); "" when none or hidden.
+function addon:GetTagText(record, maxShown)
+    if self:IsStreamerMode() or not record or not record.tags then return "" end
+    local list = {}
+    for tag in pairs(record.tags) do list[#list + 1] = tag end
+    table.sort(list)
+    if #list == 0 then return "" end
+    if maxShown and #list > maxShown then
+        local extra = #list - maxShown
+        for i = #list, maxShown + 1, -1 do list[i] = nil end
+        return table.concat(list, ", ") .. " +" .. extra
+    end
+    return table.concat(list, ", ")
+end
+
+function addon:SetNickname(nameRealm, text)
+    local record = self.db.global.players[nameRealm]
+    if not record then return end
+    text = strtrim(text or ""):sub(1, 30)
+    record.nickname = text ~= "" and text or nil
+end
+
+function addon:IsStreamerMode()
+    return self.db.global.settings.streamerMode and true or false
+end
+
+-- Removes a player and everything kept about them: notes, sessions, tags, the
+-- pin and note in Recent Allies. Run notes and other players are untouched.
+function addon:ForgetPlayer(nameRealm)
+    local g = self.db.global
+    local record = g.players[nameRealm]
+    if not record then return false end
+    local guid = self:FindRecentAllyGUID(nameRealm)
+    for _, id in ipairs(record.reviews or {}) do g.reviews[id] = nil end
+    for _, id in ipairs(record.sessions or {}) do g.sessions[id] = nil end
+    g.players[nameRealm] = nil
+    if guid and C_RecentAllies then
+        pcall(C_RecentAllies.SetRecentAllyPinned, guid, false)
+        pcall(C_RecentAllies.SetRecentAllyNote, guid, "")
+    end
+    return true
+end
+
+-- Keeps what Blizzard's Recent Allies logged about people in the journal
+-- (dungeons, raids, trades...), because that list forgets people after a
+-- while. Adds new entries to the player's own record, capped at the newest 60.
+function addon:SnapshotRecentAllies()
+    if not C_RecentAllies then return 0 end
+    local ok, list = pcall(C_RecentAllies.GetRecentAllies)
+    if not ok or type(list) ~= "table" then return 0 end
+
+    local byShort = {}
+    for nameRealm in pairs(self.db.global.players) do
+        local short = self:GetShortName(nameRealm)
+        if short then byShort[short:lower()] = nameRealm end
+    end
+
+    local added = 0
+    for _, ally in ipairs(list) do
+        local char = ally.characterData
+        local nameRealm = char and type(char.fullName) == "string" and byShort[char.fullName:lower()]
+        local interactions = nameRealm and ally.interactionData and ally.interactionData.interactions
+        if interactions then
+            local record = self.db.global.players[nameRealm]
+            local log = record.allyLog
+            if not log then log = {}; record.allyLog = log end
+            local seen = {}
+            for _, entry in ipairs(log) do seen[(entry.t or 0) .. ":" .. (entry.d or "")] = true end
+            for _, interaction in ipairs(interactions) do
+                local t, d = interaction.timestamp, interaction.description
+                local readable = type(t) == "number" and type(d) == "string"
+                    and not (issecretvalue and (issecretvalue(t) or issecretvalue(d)))
+                if readable then
+                    local key = t .. ":" .. d
+                    if not seen[key] then
+                        seen[key] = true
+                        table.insert(log, { t = t, d = d })
+                        added = added + 1
+                    end
+                end
+            end
+            table.sort(log, function(a, b) return (a.t or 0) > (b.t or 0) end)
+            while #log > 60 do table.remove(log) end
+        end
+    end
+    return added
+end
+
+-- Demo people, to try the journal out and for screenshots. They are marked
+-- (record.demo), left out of backups and removed when you log out.
+local DEMO_PEOPLE = {
+    { name = "Aria Brightwood", class = "PRIEST", race = "Human", role = "healer", social = "good", guild = "Lantern Watch",
+      note = "Healed through everything and kept chat friendly.", zone = "The Deadmines", tags = { "Helpful", "Run again" },
+      nickname = "the healer who saved us", favorite = true },
+    { name = "Borin Ironvale", class = "WARRIOR", race = "Dwarf", role = "tank", social = "good",
+      note = "Explained every boss, patiently.", zone = "Wailing Caverns", tags = { "Patient", "Good teacher" } },
+    { name = "Cass Nightwhisper", class = "ROGUE", race = "Night Elf", role = "dps", social = "average",
+      note = "Quiet, did their job.", zone = "Shadowfang Keep" },
+    { name = "Dax Stormcaller", class = "SHAMAN", race = "Orc", role = "dps", social = "good",
+      note = "Funny in chat.", zone = "Ragefire Chasm", tags = { "Funny" } },
+    { name = "Elora Vance", class = "MAGE", race = "Gnome", role = "dps", social = "bad",
+      note = "Pulled everything and left early.", zone = "The Barrens" },
+    { name = "Finn Oakheart", class = "DRUID", race = "Night Elf", role = "dps", social = "good",
+      note = "Quest buddy in Westfall.", zone = "Westfall", tags = { "Quest buddy" } },
+}
+
+function addon:HasDemo()
+    for _, record in pairs(self.db.global.players) do
+        if record.demo then return true end
+    end
+    return false
+end
+
+-- on = true adds the demo people (replacing any earlier ones); false removes them.
+function addon:SetDemo(on)
+    local g = self.db.global
+    local old = {}
+    for nameRealm, record in pairs(g.players) do
+        if record.demo then old[#old + 1] = nameRealm end
+    end
+    for _, nameRealm in ipairs(old) do self:ForgetPlayer(nameRealm) end
+    if on then
+        local realm = GetRealmName()
+        local mine = self:GetShortName(self:GetPlayerName())
+        for i, d in ipairs(DEMO_PEOPLE) do
+            local nameRealm = d.name .. "-" .. realm
+            local record = self:GetOrCreatePlayer(nameRealm)
+            record.demo = true
+            record.class, record.race, record.guild, record.level = d.class, d.race, d.guild, 18 + i
+            record.nickname, record.favorite = d.nickname, d.favorite
+            if d.tags then
+                record.tags = {}
+                for _, tag in ipairs(d.tags) do record.tags[tag] = true end
+            end
+            local review = self:AddReview(nameRealm, { encounter = d.zone, role = d.role, social = d.social,
+                performance = d.social, socialNote = d.note, performanceNote = "", zone = d.zone })
+            for n = 1, 2 do
+                local when = time() - 86400 * (i * 2 + n * 5)
+                local session = self:AddSession(nameRealm, { zone = d.zone, groupedSeconds = 1500 + i * 240 + n * 120,
+                    combatSeconds = 900, role = d.role, character = mine, dungeon = true, bosses = 2 + n,
+                    mobs = 40 + i * 12, quests = i, since = when,
+                    info = { class = d.class, race = d.race, level = 18 + i, guild = d.guild } })
+                session.date = when
+                if n == 1 then review.date = when end
+            end
+            record.lastSeen.date = time() - 86400 * (i * 2 + 5)
+        end
+    end
+    pcall(function() self:GetModule("Browser"):RefreshIfShown() end)
+    return on and #DEMO_PEOPLE or #old
 end
 
 function addon:ToggleFavorite(nameRealm)
@@ -992,6 +1187,19 @@ function addon:GetReviewTooltipVars(review, nameRealm, extra)
     if extra then
         for k, v in pairs(extra) do vars[k] = v end
     end
+    -- Your nickname and tags for them, as extra lines under the template.
+    local record = nameRealm and self.db.global.players[nameRealm]
+    if self:IsStreamerMode() then
+        vars.socialNote, vars.performanceNote = "", ""
+    elseif record then
+        local lines = {}
+        if record.nickname and record.nickname ~= "" then
+            table.insert(lines, "|cff909090Nickname:|r " .. record.nickname)
+        end
+        local tagText = self:GetTagText(record)
+        if tagText ~= "" then table.insert(lines, "|cff909090Tags:|r " .. tagText) end
+        vars.__extra = lines
+    end
     return vars
 end
 
@@ -1017,6 +1225,7 @@ function addon:RenderTooltipTemplate(template, vars)
             end)))
         end
     end
+    for _, line in ipairs(vars.__extra or {}) do table.insert(lines, line) end
     return lines
 end
 

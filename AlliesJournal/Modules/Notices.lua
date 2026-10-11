@@ -42,15 +42,75 @@ function Notices:Describe(nameRealm, withoutNote)
     local sessions = record and record.sessions and #record.sessions or 0
     if sessions > 0 then
         text = text .. string.format(", %d session%s together", sessions, sessions == 1 and "" or "s")
+
+        -- A long gap since the last time: "last together 45 days ago".
+        local last
+        for _, id in ipairs(record.sessions) do
+            local session = addon.db.global.sessions[id]
+            if session and session.date then last = math.max(last or 0, session.date) end
+        end
+        if last and time() - last >= 14 * 86400 then
+            local days = math.floor((time() - last) / 86400)
+            text = text .. ", last together " .. (days < 60 and (days .. " days ago") or (math.floor(days / 30) .. " months ago"))
+        end
     end
 
     local note = strtrim(review.socialNote or "")
     if note == "" then note = strtrim(review.performanceNote or "") end
-    if note ~= "" and not withoutNote then
+    if note ~= "" and not withoutNote and not addon:IsStreamerMode() then
         if #note > NOTE_PREVIEW then note = note:sub(1, NOTE_PREVIEW - 3) .. "..." end
         text = text .. " - your note: |cffdddddd" .. note .. "|r"
     end
     return text
+end
+
+-- An optional small panel listing the people you know who just joined, on
+-- top of the chat lines. Gathered for a moment so a whole group shows as one.
+Notices.panelLines = {}
+
+function Notices:ShowJoinPanel()
+    local lines = self.panelLines
+    self.panelLines = {}
+    self.panelTimer = nil
+    if #lines == 0 then return end
+    pcall(function()
+        local frame = self.joinPanel
+        if not frame then
+            frame = CreateFrame("Frame", nil, UIParent, "BackdropTemplate")
+            frame:SetWidth(320)
+            frame:SetPoint("TOP", UIParent, "TOP", 0, -150)
+            frame:SetFrameStrata("DIALOG")
+            frame:SetBackdrop({ bgFile = "Interface/Tooltips/UI-Tooltip-Background",
+                edgeFile = "Interface/Tooltips/UI-Tooltip-Border", tile = true, tileSize = 16, edgeSize = 14,
+                insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+            frame:SetBackdropColor(0.05, 0.05, 0.05, 0.92)
+            frame:EnableMouse(true)
+            frame:SetScript("OnMouseUp", function(self) self:Hide() end)
+            frame.title = frame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            frame.title:SetPoint("TOPLEFT", 10, -8)
+            frame.text = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+            frame.text:SetPoint("TOPLEFT", 10, -26)
+            frame.text:SetWidth(300)
+            frame.text:SetJustifyH("LEFT")
+            self.joinPanel = frame
+        end
+        frame.title:SetText("Allies Journal - people you know")
+        frame.text:SetText(table.concat(lines, "\n"))
+        frame:SetHeight(36 + frame.text:GetStringHeight())
+        frame:Show()
+        local token = (frame.token or 0) + 1
+        frame.token = token
+        C_Timer.After(12, function() if frame.token == token then frame:Hide() end end)
+    end)
+end
+
+function Notices:QueuePanelLine(text)
+    if #self.panelLines >= 6 then return end
+    table.insert(self.panelLines, text)
+    if not self.panelTimer then
+        self.panelTimer = true
+        C_Timer.After(1.5, function() self:ShowJoinPanel() end)
+    end
 end
 
 local function OnCooldown(self, kind, nameRealm, seconds)
@@ -72,6 +132,10 @@ function Notices:PlayerJoined(nameRealm, classFile)
     if OnCooldown(self, "join", nameRealm, JOIN_COOLDOWN) then return end
 
     addon:Print(string.format("%s joined - %s", ColoredName(addon:GetShortName(nameRealm), classFile), description))
+    if s.joinPanel then
+        self:QueuePanelLine(string.format("%s - %s", ColoredName(addon:GetShortName(nameRealm), classFile),
+            self:Describe(nameRealm, true) or description))
+    end
 
     -- Optional louder warning for someone you marked Not for me.
     local review = addon:GetLatestReview(nameRealm)
@@ -184,6 +248,7 @@ end
 -- first update after login isn't mistaken for a wave of people logging in.
 function Notices:OnAlliesReady()
     if not C_RecentAllies then return end
+    C_Timer.After(2, function() pcall(addon.SnapshotRecentAllies, addon) end)
     local ok, list = pcall(C_RecentAllies.GetRecentAllies)
     if not ok or type(list) ~= "table" then return end
     for _, ally in ipairs(list) do
@@ -195,6 +260,11 @@ function Notices:OnAlliesReady()
 end
 
 function Notices:OnAllyUpdated(_, guid)
+    -- Keep what Recent Allies knows about people in the journal (at most once a minute).
+    if GetTime() - (self.lastSnapshot or 0) > 60 then
+        self.lastSnapshot = GetTime()
+        pcall(addon.SnapshotRecentAllies, addon)
+    end
     local s = Settings()
     if not s or not s.onlineAlerts or not guid then return end
 

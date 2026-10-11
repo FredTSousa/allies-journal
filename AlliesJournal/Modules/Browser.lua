@@ -77,8 +77,9 @@ local ROLE_FILTER_LABELS = { All = "All", tank = "Tank", healer = "Healer", dps 
 -- bad = either rating is bad, good = both good, average = any other
 -- reviewed player, none = never reviewed.
 -- Whether Blizzard's Recent Allies has an entry for the player.
-local SOURCE_FILTERS = { "All", "favorites", "online", "recent", "other" }
+local SOURCE_FILTERS = { "All", "favorites", "online", "lastgroup", "party", "recent", "other" }
 local SOURCE_FILTER_LABELS = { All = "All", favorites = "Favorites", online = "Online now",
+    lastgroup = "My last group", party = "In my party",
     recent = "In Recent Allies", other = "Not in Recent Allies" }
 -- Shown in front of a favorite's name (a raid marker; no heart in the game's art).
 local FAVORITE_MARK = "|TInterface/TargetingFrame/UI-RaidTargetingIcon_3:14|t "
@@ -522,6 +523,55 @@ StaticPopupDialogs["ALLIESJOURNAL_CLEANUP_SESSIONS"] = {
     preferredIndex = 3,
 }
 
+StaticPopupDialogs["ALLIESJOURNAL_FORGET_PLAYER"] = {
+    text = "Forget %s completely?\n\nTheir notes, sessions, tags and nickname are removed from your journal, and their pin and note in Recent Allies are cleared.",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function(_, data)
+        addon:ForgetPlayer(data.nameRealm)
+        local browser = addon:GetModule("Browser")
+        if browser.selectedNameRealm == data.nameRealm then browser.selectedNameRealm = nil end
+        browser:Refresh()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+StaticPopupDialogs["ALLIESJOURNAL_COPY_NAME"] = {
+    text = "Press Ctrl+C to copy the name:",
+    button1 = OKAY,
+    hasEditBox = true,
+    OnShow = function(self, data)
+        local box = self.editBox or self.EditBox
+        if box then
+            box:SetText(data or "")
+            box:HighlightText()
+            box:SetFocus()
+        end
+    end,
+    EditBoxOnEscapePressed = function(self) self:GetParent():Hide() end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+StaticPopupDialogs["ALLIESJOURNAL_IGNORE_PLAYER"] = {
+    text = "Add %s to your game's ignore list?",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function(_, data)
+        local ok, err = pcall(C_FriendList.AddIgnore, data)
+        if not ok then addon:Print("Couldn't ignore " .. tostring(data) .. ": " .. tostring(err)) end
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 function Browser:OnEnable()
     self.searchText = ""
     self.roleFilter = "All"
@@ -690,6 +740,12 @@ function Browser:Refresh()
     end)
     buttonRow:AddChild(pinBtn)
 
+    local nearbyBtn = AceGUI:Create("Button")
+    nearbyBtn:SetText("Nearby")
+    nearbyBtn:SetWidth(100)
+    nearbyBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowNearby() end)
+    buttonRow:AddChild(nearbyBtn)
+
     local whoBtn = AceGUI:Create("Button")
     do
         local text, disabled = addon:GetModule("WhoCheck"):ButtonState()
@@ -843,7 +899,7 @@ function Browser:RefreshStats()
     if not self.statsLabel then return end
     local s = addon:GetStorageStats()
     self.statsLabel:SetText(string.format(
-        "%d player(s) | %d session(s) | %d notes\nChat %s  ·  Sessions %s  ·  Notes %s  ·  Players %s  ·  Total %s",
+        "%d player(s) | %d session(s) | %d notes" .. (addon.db.global.settings.paused and "  |cffff9933recording paused|r" or "") .. "\nChat %s  ·  Sessions %s  ·  Notes %s  ·  Players %s  ·  Total %s",
         s.playerCount, s.sessionCount, s.reviewCount,
         addon:FormatBytes(s.chatBytes), addon:FormatBytes(s.sessionsBytes),
         addon:FormatBytes(s.reviewsBytes), addon:FormatBytes(s.playersBytes), addon:FormatBytes(s.totalBytes)))
@@ -908,6 +964,15 @@ function Browser:RefreshList()
         local ok, info = pcall(C_CreatureInfo.GetClassInfo, classID)
         return ok and info and info.classFile or nil
     end
+    local lastGroup, inParty
+    if self.sourceFilter == "lastgroup" then
+        lastGroup = {}
+        local runs = addon:GetRuns()
+        for _, nameRealm in ipairs(runs[1] and runs[1].members or {}) do lastGroup[nameRealm] = true end
+    elseif self.sourceFilter == "party" then
+        inParty = {}
+        for _, member in pairs(addon:GetModule("RosterTracker").roster) do inParty[member.nameRealm] = true end
+    end
     for _, record in ipairs(addon:SearchPlayers(self.searchText, ClassFileOf)) do
         local latest = addon:GetLatestReview(record.nameRealm)
         local passesRole = self.roleFilter == "All" or (latest and latest.role == self.roleFilter)
@@ -919,6 +984,8 @@ function Browser:RefreshList()
         local passesSource = show == "All"
             or (show == "favorites" and record.favorite)
             or (show == "online" and allyData and allyData.stateData and allyData.stateData.isOnline)
+            or (show == "lastgroup" and lastGroup[record.nameRealm])
+            or (show == "party" and inParty[record.nameRealm])
             or (show == "recent" and recentAlly ~= nil)
             or (show == "other" and recentAlly == nil)
         if passesRole and passesRating and passesSource then
@@ -969,6 +1036,9 @@ function Browser:RefreshList()
                 summary = string.format('|cff888888No reviews yet - %d session(s)|r', #record.sessions)
             end
 
+            local tagText = addon:GetTagText(record, 2)
+            if tagText ~= '' then summary = summary .. '  |cff909090' .. tagText .. '|r' end
+
             local infoText = allyData and InfoTextFor(allyData) or ''
             if not allyData then
                 infoText = 'not recent'
@@ -982,6 +1052,9 @@ function Browser:RefreshList()
             local nameLine = (record.favorite and FAVORITE_MARK or '') .. RoleIconFor(latest and latest.role) .. ColoredShortName(record.nameRealm, allyData)
             if not allyData or allyData.fromWho then
                 nameLine = nameLine .. ' |cff909090[NR]|r'
+            end
+            if record.nickname and record.nickname ~= '' and not addon:IsStreamerMode() then
+                nameLine = nameLine .. ' |cff909090"' .. record.nickname .. '"|r'
             end
 
             local card = AceGUI:Create('PRPlayerCard')
@@ -1028,6 +1101,7 @@ end
 -- A rating note, in quotes and muted, after the rating word.
 local function NoteText(note)
     if not note or note == "" then return "" end
+    if addon:IsStreamerMode() then return "  |cff808080(hidden - streamer mode)|r" end
     return "  |cffbbbbbb\"" .. note .. "\"|r"
 end
 
@@ -1105,7 +1179,52 @@ function Browser:ShowCardMenu(owner, nameRealm)
             self:RefreshList()
         end)
         root:CreateButton("View history", function() self:ShowHistory(nameRealm) end)
+        root:CreateButton("Copy name", function()
+            StaticPopup_Show("ALLIESJOURNAL_COPY_NAME", nil, nil, addon:GetShortName(nameRealm))
+        end)
+        local latest = addon:GetLatestReview(nameRealm)
+        if latest and latest.social == "bad" then
+            root:CreateButton("Ignore", function()
+                local short = addon:GetShortName(nameRealm)
+                StaticPopup_Show("ALLIESJOURNAL_IGNORE_PLAYER", short, nil, short)
+            end)
+        end
+        root:CreateButton("Forget player", function()
+            StaticPopup_Show("ALLIESJOURNAL_FORGET_PLAYER", addon:GetShortName(nameRealm), nil, { nameRealm = nameRealm })
+        end)
     end)
+end
+
+-- What Blizzard's Recent Allies logged about this player: the live entries,
+-- plus the ones kept in the journal after Blizzard let go of them.
+local function AddAllyHistory(detail, allyData, record)
+    local rows, seen = {}, {}
+    local live = allyData and allyData.interactionData and allyData.interactionData.interactions
+    for _, interaction in ipairs(live or {}) do
+        seen[(interaction.timestamp or 0) .. ":" .. (interaction.description or "")] = true
+        table.insert(rows, { t = interaction.timestamp or 0, text = string.format("[%s] %s%s",
+            date("%Y-%m-%d %H:%M", interaction.timestamp or 0), interaction.description or "?", InteractionDetails(interaction)) })
+    end
+    for _, entry in ipairs(record and record.allyLog or {}) do
+        if not seen[(entry.t or 0) .. ":" .. (entry.d or "")] then
+            table.insert(rows, { t = entry.t or 0, text = string.format("[%s] %s  |cff808080(kept)|r",
+                date("%Y-%m-%d %H:%M", entry.t or 0), entry.d or "?") })
+        end
+    end
+    if #rows == 0 then return end
+    table.sort(rows, function(a, b) return a.t > b.t end)
+
+    local group = AceGUI:Create("InlineGroup")
+    group:SetTitle("Together (Recent Allies)")
+    group:SetLayout("List")
+    group:SetFullWidth(true)
+    detail:AddChild(group)
+    for _, row in ipairs(rows) do
+        local line = AceGUI:Create("Label")
+        line:SetFullWidth(true)
+        line:SetText(row.text)
+        group:AddChild(line)
+    end
 end
 
 function Browser:ShowHistory(nameRealm)
@@ -1155,6 +1274,10 @@ function Browser:ShowHistory(nameRealm)
         if stats.bosses > 0 then table.insert(done, string.format("%d boss%s", stats.bosses, stats.bosses == 1 and "" or "es")) end
         if stats.mobs > 0 then table.insert(done, string.format("%d mob%s", stats.mobs, stats.mobs == 1 and "" or "s")) end
         if stats.quests > 0 then table.insert(done, string.format("%d quest%s", stats.quests, stats.quests == 1 and "" or "s")) end
+        if record and record.trades and (record.trades.count or 0) > 0 then
+            table.insert(done, string.format("traded %d time%s (last %s)", record.trades.count,
+                record.trades.count == 1 and "" or "s", date("%Y-%m-%d", record.trades.last or 0)))
+        end
         local seen = {}
         for _, role in ipairs({ "tank", "healer", "dps" }) do
             if (stats.roles[role] or 0) > 0 then
@@ -1190,11 +1313,60 @@ function Browser:ShowHistory(nameRealm)
         end
         local text = "|cffffd100How you met:|r " .. (#who > 0 and (table.concat(who, " ") .. ", ") or "")
         text = text .. (record.met.zone and ("in " .. record.met.zone .. " ") or "") .. GRAY .. "on " .. date("%Y-%m-%d", record.met.date or time()) .. "|r"
+        if record.met.character then text = text .. GRAY .. "  on " .. record.met.character .. "|r" end
         if record.guild then text = text .. GRAY .. "   -   Guild: " .. record.guild .. "|r" end
         local met = AceGUI:Create("Label")
         met:SetFullWidth(true)
         met:SetText(text)
         detail:AddChild(met)
+    end
+
+    -- Your private nickname and tags for them.
+    if record then
+        local personal = AceGUI:Create("SimpleGroup")
+        personal:SetFullWidth(true)
+        personal:SetLayout("Flow")
+
+        local nick = AceGUI:Create("EditBox")
+        nick:SetLabel("Nickname (only you see it)")
+        nick:SetWidth(200)
+        nick:SetText(record.nickname or "")
+        nick:SetCallback("OnEnterPressed", function(_, _, text)
+            addon:SetNickname(nameRealm, text)
+            self:RefreshList()
+        end)
+        personal:AddChild(nick)
+
+        local allTags = addon:GetAllTags()
+        local tagLabels = {}
+        for _, tag in ipairs(allTags) do tagLabels[tag] = tag end
+        local tagDrop = AceGUI:Create("Dropdown")
+        tagDrop:SetLabel("Tags")
+        tagDrop:SetWidth(170)
+        tagDrop:SetMultiselect(true)
+        tagDrop:SetList(tagLabels, allTags)
+        for _, tag in ipairs(allTags) do
+            tagDrop:SetItemValue(tag, record.tags and record.tags[tag] and true or false)
+        end
+        tagDrop:SetCallback("OnValueChanged", function(_, _, tag, checked)
+            addon:SetTag(nameRealm, tag, checked)
+            self:RefreshList()
+        end)
+        personal:AddChild(tagDrop)
+
+        local newTag = AceGUI:Create("EditBox")
+        newTag:SetLabel("New tag")
+        newTag:SetWidth(120)
+        newTag:SetCallback("OnEnterPressed", function(_, _, text)
+            local tag = addon:AddCustomTag(text)
+            if tag then
+                addon:SetTag(nameRealm, tag, true)
+                self:RefreshList()
+                C_Timer.After(0, function() self:ShowHistory(nameRealm) end)
+            end
+        end)
+        personal:AddChild(newTag)
+        detail:AddChild(personal)
     end
 
 
@@ -1214,33 +1386,9 @@ function Browser:ShowHistory(nameRealm)
         info:SetText(StatusIconFor(allyData) .. " " .. (infoText ~= "" and infoText or "no class/level data") .. pinText)
         detail:AddChild(info)
 
-        -- What Blizzard's own RecentAllies system already tracked about
-        -- this player independently of our reviews - dungeon/raid/duel/
-        -- etc. history, each with a ready-made human-readable description
-        -- (interaction.description) and timestamp, free of any tracking
-        -- work on our side.
-        local interactions = allyData.interactionData and allyData.interactionData.interactions
-        if interactions and #interactions > 0 then
-            local interactionsGroup = AceGUI:Create("InlineGroup")
-            interactionsGroup:SetTitle("Together (Recent Allies)")
-            interactionsGroup:SetLayout("List")
-            interactionsGroup:SetFullWidth(true)
-            detail:AddChild(interactionsGroup)
-
-            local sorted = {}
-            for _, interaction in ipairs(interactions) do table.insert(sorted, interaction) end
-            table.sort(sorted, function(a, b) return (a.timestamp or 0) > (b.timestamp or 0) end)
-
-            for _, interaction in ipairs(sorted) do
-                local line = AceGUI:Create("Label")
-                line:SetFullWidth(true)
-                line:SetText(string.format("[%s] %s%s",
-                    date("%Y-%m-%d %H:%M", interaction.timestamp or 0), interaction.description or "?",
-                    InteractionDetails(interaction)))
-                interactionsGroup:AddChild(line)
-            end
-        end
     end
+
+    AddAllyHistory(detail, allyData, record)
 
     local reviewsGroup = AceGUI:Create("InlineGroup")
     reviewsGroup:SetTitle("Notes")
@@ -1388,7 +1536,8 @@ function Browser:ShowHistory(nameRealm)
         local label = AceGUI:Create("Label")
         label:SetFullWidth(true)
         local lines = {
-            string.format("|cffffd100%s|r  %s%s|r", session.zone or "Unknown", GRAY, dateStr),
+            string.format("|cffffd100%s|r  %s%s%s|r", session.zone or "Unknown", GRAY, dateStr,
+                session.character and ("  on " .. session.character) or ""),
             string.format("Grouped %s  -  in combat %s", FormatDuration(session.groupedSeconds), FormatDuration(session.combatSeconds)),
         }
         local dmg = StatLine("Damage", "DPS", session.dps, session.groupMaxDps, session.groupTotalDps)

@@ -239,6 +239,9 @@ local function BuildGeneral(scroll)
         AddCheckbox(group, "At the end of a dungeon, show a short recap of the run",
             function() return notices.runRecap end,
             function(v) notices.runRecap = v and true or false end)
+        AddCheckbox(group, "Also show a small panel with the people I know when they join my group",
+            function() return notices.joinPanel end,
+            function(v) notices.joinPanel = v and true or false end)
         AddCheckbox(group, "Warn me on screen, with a sound, when someone I noted as Not for me joins my group",
             function() return notices.warnBad end,
             function(v) notices.warnBad = v and true or false end)
@@ -249,6 +252,9 @@ local function BuildGeneral(scroll)
     end)
 
     Section(scroll, "Writing a note", function(group)
+        AddTextInput(group, "Message for the Thanks button ({name} and {place} are filled in)",
+            function() return settings.thanksMessage end,
+            function(v) if strtrim(v or "") ~= "" then settings.thanksMessage = v end end)
         AddCheckbox(group, "At the end of a run, put everyone in one window (a tab each)",
             function() return settings.playerStrip end,
             function(v) settings.playerStrip = v and true or false end)
@@ -336,6 +342,27 @@ local function BuildGeneral(scroll)
             group:AddChild(resetBtn)
         end)
     end
+
+    Section(scroll, "Privacy", function(group)
+        AddCheckbox(group, "Streamer mode: hide my notes, nicknames and tags",
+            function() return settings.streamerMode end,
+            function(v) settings.streamerMode = v and true or false; addon:GetModule("Browser"):RefreshIfShown() end)
+        AddNote(group, "Notes are replaced by a short placeholder in tooltips, chat lines and the journal. Names and stars stay. /aj streamer does the same.")
+    end)
+
+    Section(scroll, "Seen nearby", function(group)
+        AddCheckbox(group, "Remember friendly players I pass in the open world (7 days)",
+            function() return settings.nearby.enabled end,
+            function(v) settings.nearby.enabled = v and true or false end)
+        AddNote(group, "Off by default. Lets you add someone to your journal a few days after you met. See the Nearby button in the journal or /aj nearby.")
+    end)
+
+    Section(scroll, "Recording", function(group)
+        AddCheckbox(group, "Pause recording (no new sessions or automatic note windows)",
+            function() return settings.paused end,
+            function(v) settings.paused = v and true or false; addon:GetModule("Browser"):RefreshIfShown() end)
+        AddNote(group, "Notes you write yourself keep working. /aj pause does the same.")
+    end)
 
     Section(scroll, "Backup", function(group)
         local Backup = addon:GetModule("Backup")
@@ -543,6 +570,25 @@ local TABS = {
 -- Window
 --------------------------------------------------------------------------
 
+function Options:ResetWindows()
+    local settings = addon.db.global.settings
+    settings.browserWindow = { width = 550, height = 700 }
+    settings.reviewWindow = { width = 550, height = 700 }
+    for _, name in ipairs({ "Browser", "ReviewPrompt" }) do
+        local module = addon:GetModule(name)
+        pcall(module.ApplyWindowSize, module)
+        if module.frame and module.frame.frame then
+            module.frame.frame:ClearAllPoints()
+            module.frame.frame:SetPoint("CENTER", UIParent, "CENTER")
+        end
+    end
+    if self.frame and self.frame.frame then
+        self.frame.frame:ClearAllPoints()
+        self.frame.frame:SetPoint("CENTER", UIParent, "CENTER")
+    end
+    addon:Print("Window sizes and positions reset.")
+end
+
 function Options:ResetAll()
     local settings = addon.db.global.settings
     settings.badge = {
@@ -565,7 +611,11 @@ function Options:ResetAll()
     settings.recentAllies = { pinBad = false }
     settings.simpleNotes = false
     settings.playerStrip = true
-    settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false }
+    settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false, joinPanel = false }
+    settings.streamerMode = false
+    settings.paused = false
+    settings.nearby = { enabled = false }
+    settings.thanksMessage = "Thanks for the run, {name}!"
     settings.chatIcons = true
     settings.backup = { enabled = true }
     settings.browserWindow = { width = 550, height = 700 }

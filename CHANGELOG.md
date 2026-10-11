@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.4-beta
+
+- **Kept for good:** what Blizzard's Recent Allies logged about each person (dungeons, raids, trades) is now saved in your journal, so it stays after they drop off that list.
+- **Private tags and nicknames** for each player, in their detail. They show on cards and in tooltips, and search finds them (`tag:helpful`).
+- The journal shows which of your characters you met someone on and played with them as.
+- The join line says "last together 45 days ago" after a long gap.
+- **Forget player** (right-click a card) removes everything about someone. **Pause recording** (`/aj pause` or the options) stops new sessions and automatic note windows.
+- New **Show** filters: My last group and In my party.
+- A **Thanks** button in the note window opens a whisper with your thank-you ready. Nothing is sent until you press Enter, and you can change the message in the options.
+- Right-click a card: Copy name, and Ignore for people you noted as Not for me.
+- Trades with people in your journal are counted (how many, and the last date).
+- **Streamer mode** (`/aj streamer`) hides your notes, nicknames and tags in tooltips, chat and the journal.
+- An optional small panel lists the people you know when they join your group.
+- **Seen nearby** (off by default): remembers friendly players you pass in the open world for 7 days, so you can add them to your journal later. Open it with the Nearby button or `/aj nearby`.
+- `/aj demo` adds a few demo people to try the journal out, and `/aj resetwindow` puts the windows back to their default size and place.
+
 ## 0.3.3-beta
 
 - **Backup:** a safety copy of your journal is kept on your computer every 12 hours (the last three). Restore one in `/aj options`, General tab, or make one now with `/aj backup`.

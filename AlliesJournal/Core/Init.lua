@@ -180,6 +180,13 @@ function AlliesJournal:OnInitialize()
     -- A star in front of what noted players say in chat, and a local safety
     -- copy of the journal (see Backup).
     if g.settings.chatIcons == nil then g.settings.chatIcons = true end
+    if g.settings.paused == nil then g.settings.paused = false end
+    g.settings.nearby = g.settings.nearby or {}
+    if g.settings.nearby.enabled == nil then g.settings.nearby.enabled = false end
+    if g.settings.streamerMode == nil then g.settings.streamerMode = false end
+    if g.settings.thanksMessage == nil then g.settings.thanksMessage = "Thanks for the run, {name}!" end
+    if g.settings.notices.joinPanel == nil then g.settings.notices.joinPanel = false end
+    g.settings.customTags = g.settings.customTags or {}
     g.settings.backup = g.settings.backup or {}
     if g.settings.backup.enabled == nil then g.settings.backup.enabled = true end
     g.settings.browserList.cardFade = g.settings.browserList.cardFade or 0.25
@@ -440,6 +447,24 @@ function AlliesJournal:SlashCommand(input)
     elseif cmd == "notes" then
         local plan = self:GetModule("ReviewPrompt")
         if rest:lower() == "skip" then plan:GroupDrop() else plan:GroupReopen() end
+    elseif cmd == "nearby" then
+        self:GetModule("Diary"):ShowNearby()
+    elseif cmd == "streamer" then
+        local settings = self.db.global.settings
+        settings.streamerMode = not settings.streamerMode
+        self:Print(settings.streamerMode and "Streamer mode ON: your notes, nicknames and tags are hidden in tooltips, chat and the journal." or "Streamer mode off.")
+        pcall(function() self:GetModule("Browser"):RefreshIfShown() end)
+    elseif cmd == "demo" then
+        local turnOn = not self:HasDemo()
+        self:SetDemo(turnOn)
+        self:Print(turnOn and "Demo people added so you can try the journal. They are removed when you log out; /aj demo again removes them now."
+            or "Demo people removed.")
+    elseif cmd == "resetwindow" then
+        self:GetModule("Options"):ResetWindows()
+    elseif cmd == "pause" then
+        local settings = self.db.global.settings
+        settings.paused = not settings.paused
+        self:Print(settings.paused and "Recording paused: no new sessions or automatic note windows. /aj pause again to resume." or "Recording resumed.")
     elseif cmd == "backup" then
         local entry = self:GetModule("Backup"):Snapshot("manual")
         self:Print("Backed up your journal: " .. self:GetModule("Backup"):Describe(entry) .. ". Restore from /aj options.")
@@ -477,6 +502,11 @@ function AlliesJournal:SlashCommand(input)
         self:Print("  /aj notes - open the notes you put off with Later (\"/aj notes skip\" drops them)")
         self:Print("  /aj runs - your recorded runs, with who was there and a note for each")
         self:Print("  /aj backup - make a backup of your journal now (restore from /aj options)")
+        self:Print("  /aj pause - pause or resume recording (no new sessions or automatic note windows)")
+        self:Print("  /aj nearby - players you passed in the open world (opt-in, kept 7 days)")
+        self:Print("  /aj streamer - hide your notes, nicknames and tags in tooltips, chat and the journal (for streaming)")
+        self:Print("  /aj demo - add or remove a few demo people to try the journal out")
+        self:Print("  /aj resetwindow - put the journal and note windows back to their default size and place")
         self:Print("  /aj numbers - your journal in numbers")
         self:Print("  /aj minimap - show or hide the minimap button")
         self:Print("  /aj pinjournal - pin every player with a note who isn't pinned in Recent Allies yet (skips anyone marked 'Not for me' or 'Struggled' unless that's turned on in /aj options)")

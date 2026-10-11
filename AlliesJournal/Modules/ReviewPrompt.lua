@@ -358,6 +358,23 @@ function ReviewPrompt:HideChartRows()
     end
 end
 
+function ReviewPrompt:SayThanks()
+    local data = self.current
+    if not data then return end
+    local short = addon:GetShortName(data.nameRealm)
+    local template = addon.db.global.settings.thanksMessage or "Thanks for the run, {name}!"
+    local msg = template:gsub("{name}", function() return short end):gsub("{place}", function() return data.encounter or "" end)
+    local ok, err = pcall(function()
+        ChatFrame_SendTell(short)
+        local box = ChatEdit_GetActiveWindow and ChatEdit_GetActiveWindow()
+        if box then
+            box:SetText(msg)
+            box:SetCursorPosition(#msg)
+        end
+    end)
+    if not ok then addon:Print("Couldn't open a whisper: " .. tostring(err)) end
+end
+
 function ReviewPrompt:BuildFrame()
     local started = debugprofilestop()
     self:BuildFrameInner()
@@ -509,8 +526,24 @@ function ReviewPrompt:BuildFrameInner()
     skipBtn:SetCallback("OnClick", function() self:Skip() end)
     buttonRow:AddChild(skipBtn)
 
+    -- Opens a whisper with a thank-you ready; nothing is sent until you press Enter.
+    if not self.editingReviewID then
+        local thanksBtn = AceGUI:Create("Button")
+        thanksBtn:SetText("Thanks")
+        thanksBtn:SetWidth(80)
+        thanksBtn:SetCallback("OnClick", function() self:SayThanks() end)
+        thanksBtn:SetCallback("OnEnter", function(widget)
+            GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
+            GameTooltip:SetText("Say thanks", 1, 1, 1)
+            GameTooltip:AddLine("Opens a whisper to them with your thank-you message ready. Nothing is sent until you press Enter. You can change the message in /aj options.", nil, nil, nil, true)
+            GameTooltip:Show()
+        end)
+        thanksBtn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+        buttonRow:AddChild(thanksBtn)
+    end
+
     -- Save takes all the room left in the row after the buttons on its left.
-    local leftWidth = (inGroup and 70 or 0) + 70
+    local leftWidth = (inGroup and 70 or 0) + 70 + (not self.editingReviewID and 80 or 0)
     local saveWidth = math.max(150, windowSettings.width - 32 - leftWidth - 12)
 
     -- Reads "Save as Fine/Solid" while nothing has been touched (see
