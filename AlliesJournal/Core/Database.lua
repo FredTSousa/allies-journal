@@ -1252,10 +1252,10 @@ local function SerializeValue(v)
 end
 
 -- Plain-text backup/restore, independent of whatever is (or isn't)
--- surviving to disk on its own - this beta client has a known issue where
--- SavedVariables don't reliably persist. Dumps db.global as a loadable Lua
--- literal the player can copy somewhere safe and restore later via
--- ImportData.
+-- surviving to disk on its own - SavedVariables didn't reliably persist
+-- during the Forever beta, and this remains as a safety net. Dumps
+-- db.global as a loadable Lua literal the player can copy somewhere safe
+-- and restore later via ImportData.
 function addon:ExportData()
     return "return " .. SerializeValue(self.db.global)
 end
@@ -1453,7 +1453,7 @@ function addon:ImportData(text)
     -- nothing sensible to "merge" field by field, so an imported settings
     -- table replaces the current one outright (this is also how /pr
     -- options values get backed up and restored, per user request, since
-    -- they're just as exposed to the same beta SavedVariables issue).
+    -- they're just as exposed to losing their SavedVariables).
     local settingsRestored = false
     if type(imported.settings) == "table" then
         self.db.global.settings = imported.settings

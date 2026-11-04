@@ -4,12 +4,12 @@ A World of Warcraft addon that works like a private journal of the players you g
 
 I used to add players I liked as friends, and ended up with a huge list of names I couldn't place. This pins them in Blizzard's Recent Allies list with your note instead.
 
-> **Beta.** Allies Journal is new and has only been tested on the Forever client. If something breaks, please [open an issue](https://github.com/FredTSousa/allies-journal/issues) with what you were doing and any error text (BugSack or `/console scriptErrors 1` helps).
+> **Found a problem?** Please [open an issue](https://github.com/FredTSousa/allies-journal/issues) with what you were doing and any error text (BugSack or `/console scriptErrors 1` helps).
 
 ## What it does
 
-- **Notes.** When a run ends or someone leaves your group, a small window lets you write a note on them: how they were to play with and how they played (Good, Average, Bad), quick tags, and the fights, DPS chart and chat from your time together. If two questions feel like too much, there is an option to ask just one ("How was it?").
-- **Recent Allies.** Players with a note are pinned in Blizzard's Recent Allies list with a short note, and the interactions Blizzard recorded (fought together, traded and so on) show in their detail. Players you noted as Bad aren't pinned unless you turn that on.
+- **Notes.** When a run ends or someone leaves your group, a small window lets you write a note on them: how they were to play with (Great to play with, Fine, Not for me) and how they played (Strong, Solid, Struggled), quick tags, and the fights, DPS chart and chat from your time together. If two questions feel like too much, there is an option to ask just one ("How was it?").
+- **Recent Allies.** Players with a note are pinned in Blizzard's Recent Allies list with a short note, and the interactions Blizzard recorded (fought together, traded and so on) show in their detail. Players you marked Not for me or Struggled aren't pinned unless you turn that on.
 - **Session history.** Every run you played together is recorded: when, where, how long, and how it went. Dungeons are tracked one run at a time.
 - **Group Finder.** Listings with someone from your journal get a badge and a tooltip with your note, and each listing shows where its leader currently is.
 - **Frames and tooltips.** A badge on target, party and raid frames, a line in the tooltip, and a mark next to their name in chat.
@@ -40,4 +40,4 @@ Allies Journal is built for the Forever client and only loads there. Copy the `A
 
 ## Releasing
 
-Pushing a version tag (for example `v0.1.0-beta`; a tag containing "beta" is published as a beta) runs `.github/workflows/release.yml`, which builds the package with BigWigs Packager and uploads it. Before the first release, fill in the `X-Curse-Project-ID`, `X-WoWI-ID`, `X-Wago-ID` and `X-Website` lines in `AlliesJournal/AlliesJournal.toc` and add the `CF_API_TOKEN`, `WOWI_API_TOKEN` and `WAGO_API_TOKEN` secrets to the repository.
+Pushing a version tag runs `.github/workflows/release.yml`, which builds the package with BigWigs Packager and uploads it to CurseForge and GitHub. A tag like `v1.0.0` is published as a full release, and a tag containing "beta" (for example `v1.1.0-beta`) is published as a beta. To also publish to WoWInterface or Wago, fill in the `X-WoWI-ID` or `X-Wago-ID` line in `AlliesJournal/AlliesJournal.toc` and add the `WOWI_API_TOKEN` or `WAGO_API_TOKEN` secret to the repository.

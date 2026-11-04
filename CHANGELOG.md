@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.0
+
+- First full release, for the launch of World of Warcraft: Forever. Allies Journal is out of beta.
+- No new features since 0.3.4-beta, and your journal carries over as it is.
+- If something breaks, please [open an issue](https://github.com/FredTSousa/allies-journal/issues) with what you were doing and any error text.
+
 ## 0.3.4-beta
 
 - **Kept for good:** what Blizzard's Recent Allies logged about each person (dungeons, raids, trades) is now saved in your journal, so it stays after they drop off that list.
