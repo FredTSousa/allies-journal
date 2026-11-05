@@ -172,6 +172,9 @@ function AlliesJournal:OnInitialize()
     -- Hours before the automatic note window asks about the same player again
     -- (see RosterTracker:AskedRecently). 0 turns the wait off.
     if g.settings.askAgainHours == nil then g.settings.askAgainHours = 12 end
+    -- Notes on someone before the window turns into a chat line (see
+    -- RosterTracker:KnownWell). 0 always opens the window.
+    if g.settings.windowNoteLimit == nil then g.settings.windowNoteLimit = 3 end
     -- Small chat reminders: someone you have a note on joins your group, and
     -- someone you noted as Great comes online.
     g.settings.notices = g.settings.notices or {}

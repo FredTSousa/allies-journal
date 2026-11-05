@@ -428,6 +428,10 @@ local function BuildSessions(scroll)
         AddSlider(group, "Ask about the same player again after (hours)", 0, 72, 1,
             function() return settings.askAgainHours or 12 end,
             function(v) settings.askAgainHours = v end)
+        AddNote(group, "Once you've written this many notes on someone, you get a line in chat with an Add a note link instead of the window. It comes no more often than the wait above. Only notes you wrote count, not windows you skipped. 0 always opens the window.")
+        AddSlider(group, "Notes on a player before the window stops opening", 0, 20, 1,
+            function() return settings.windowNoteLimit or 3 end,
+            function(v) settings.windowNoteLimit = v end)
     end)
 
     Section(scroll, "When a session is recorded", function(group)
@@ -616,6 +620,7 @@ function Options:ResetAll()
     settings.simpleNotes = false
     settings.playerStrip = true
     settings.askAgainHours = 12
+    settings.windowNoteLimit = 3
     settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false, joinPanel = false }
     settings.streamerMode = false
     settings.paused = false

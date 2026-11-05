@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Once you've written 3 notes on someone, you get a line in chat with an **[Add a note]** link instead of the note window. The link opens the same note, with that run's fights and chat. New people in the group still get the window. Change the number in `/aj options`, Sessions tab, or set it to 0 to always get the window.
+
 ## 1.0.1
 
 - The note window no longer keeps asking about people you play with often. Once it has asked about someone, or you've written them a note, it leaves them alone for 12 hours, even across dungeons, regrouping and a `/reload`. Change the wait in `/aj options`, Sessions tab. Sessions are still recorded, and you can still right-click a name to write a note.

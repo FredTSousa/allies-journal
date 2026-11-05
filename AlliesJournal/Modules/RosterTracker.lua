@@ -208,6 +208,14 @@ function RosterTracker:AskedRecently(nameRealm)
     return review ~= nil and review.date > cutoff
 end
 
+-- Enough notes on someone that a window would only be in the way: they get a
+-- chat line with a link instead (ReviewPrompt:OfferInChat). Only notes you
+-- actually wrote count, not windows you skipped. 0 always opens the window.
+function RosterTracker:KnownWell(nameRealm)
+    local limit = addon.db.global.settings.windowNoteLimit or 3
+    return limit > 0 and #addon:GetReviewsForPlayer(nameRealm) >= limit
+end
+
 function RosterTracker:MarkAsked(nameRealm)
     AlliesJournalDB.askedAt = AlliesJournalDB.askedAt or {}
     AlliesJournalDB.askedAt[nameRealm] = time()
@@ -619,7 +627,7 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
 
     local capture = addon:GetModule("ReviewCapture")
     local gateSeconds = self:GetGateSeconds()
-    local batch = {}
+    local batch, offers = {}, {}
 
     for _, c in ipairs(candidates) do
         local since = self:RunSince(c.since, runId)
@@ -656,7 +664,7 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
                 fights[i] = fight
             end
 
-            table.insert(batch, {
+            table.insert(self:KnownWell(c.data.nameRealm) and offers or batch, {
                 nameRealm = c.data.nameRealm,
                 encounter = self:PlaceName(),
                 role = role,
@@ -673,6 +681,9 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
 
     if #batch > 0 then
         addon:GetModule("ReviewPrompt"):QueueBatch(batch)
+    end
+    if #offers > 0 then
+        addon:GetModule("ReviewPrompt"):OfferInChat(offers)
     end
 end
 

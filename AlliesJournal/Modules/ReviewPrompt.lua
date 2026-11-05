@@ -1385,6 +1385,8 @@ hooksecurefunc("SetItemRef", function(link)
     if kind == "addon" and name == "AlliesJournal" then
         if action == "notes" then
             addon:GetModule("ReviewPrompt"):GroupReopen()
+        elseif action == "offer" then
+            addon:GetModule("ReviewPrompt"):TakeOffer(tonumber((select(4, strsplit(":", link)))))
         elseif action == "runs" then
             addon:GetModule("Diary"):ShowRuns()
         elseif action == "player" then
@@ -1478,18 +1480,54 @@ function ReviewPrompt:AddToGroup(list, asked)
     end
 end
 
+-- "Anna, Bob, Cid, Dee and 2 more"
+local function NameList(names)
+    local shown = {}
+    for i = 1, math.min(#names, 4) do shown[i] = names[i] end
+    local text = table.concat(shown, ", ")
+    if #names > 4 then text = text .. string.format(" and %d more", #names - 4) end
+    return text
+end
+
 function ReviewPrompt:Remind()
     if not self:HasWaiting() then return end
     local names = {}
     for _, member in ipairs(self.group) do
         if member.status == "pending" then table.insert(names, addon:GetShortName(member.data.nameRealm)) end
     end
-    local shown = {}
-    for i = 1, math.min(#names, 4) do shown[i] = names[i] end
-    local text = table.concat(shown, ", ")
-    if #names > 4 then text = text .. string.format(" and %d more", #names - 4) end
     addon:Print(string.format("You still have %d note%s to write: %s. %s",
-        #names, #names == 1 and "" or "s", text, NOTES_LINK))
+        #names, #names == 1 and "" or "s", NameList(names), NOTES_LINK))
+end
+
+-- People you already have plenty of notes on (RosterTracker:KnownWell) get one
+-- chat line instead of a window. Their fights are kept here, in memory only,
+-- so the line's link opens the same note a window would have. Only the last
+-- few lines stay clickable: each one holds a copy of that run's fights.
+local OFFERS_KEPT = 10
+
+ReviewPrompt.offers = {}      -- id -> list of QueueBatch entries
+ReviewPrompt.offerCounter = 0
+
+function ReviewPrompt:OfferInChat(list)
+    self.offerCounter = self.offerCounter + 1
+    local id = self.offerCounter
+    self.offers[id] = list
+    self.offers[id - OFFERS_KEPT] = nil
+
+    local names = {}
+    for i, data in ipairs(list) do names[i] = ClassColoredName(data) end
+    addon:Print(string.format("Played with %s again. |cff40ff40|Haddon:AlliesJournal:offer:%d|h[Add a note]|h|r",
+        NameList(names), id))
+end
+
+function ReviewPrompt:TakeOffer(id)
+    local list = id and self.offers[id]
+    if not list then
+        addon:Print("That link has expired. You can still right-click their name to add a note.")
+        return
+    end
+    self.offers[id] = nil
+    self:QueueBatch(list, true)
 end
 
 -- Starts or stops the repeating chat reminder and the minimap tint to match
