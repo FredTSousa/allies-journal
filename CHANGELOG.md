@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1
 
 - The note window no longer keeps asking about people you play with often. Once it has asked about someone, or you've written them a note, it leaves them alone for 12 hours, even across dungeons, regrouping and a `/reload`. Change the wait in `/aj options`, Sessions tab. Sessions are still recorded, and you can still right-click a name to write a note.
 - The chat reminder about notes put off for later now comes every 10 minutes instead of every minute.
