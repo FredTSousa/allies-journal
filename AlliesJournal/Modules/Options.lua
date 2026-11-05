@@ -424,6 +424,10 @@ local function BuildSessions(scroll)
         AddSlider(group, "Minimum time grouped (minutes)", 1, 60, 1,
             function() return settings.gateMinutes or 10 end,
             function(v) settings.gateMinutes = v end)
+        AddNote(group, "Once you've been asked about someone, or written them a note, the window leaves them alone for this long, so a group you play with often doesn't come up after every dungeon. Their sessions are still recorded, and you can still right-click their name to write a note. 0 asks every time.")
+        AddSlider(group, "Ask about the same player again after (hours)", 0, 72, 1,
+            function() return settings.askAgainHours or 12 end,
+            function(v) settings.askAgainHours = v end)
     end)
 
     Section(scroll, "When a session is recorded", function(group)
@@ -611,6 +615,7 @@ function Options:ResetAll()
     settings.recentAllies = { pinBad = false }
     settings.simpleNotes = false
     settings.playerStrip = true
+    settings.askAgainHours = 12
     settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false, joinPanel = false }
     settings.streamerMode = false
     settings.paused = false

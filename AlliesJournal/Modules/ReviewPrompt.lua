@@ -1369,11 +1369,11 @@ end
 -- Putting a group off until later
 ----------------------------------------------------------------------
 -- "Later" closes the window but keeps everyone's form, fights and chat in
--- memory. A chat line every minute, and a tinted minimap button, remind you
+-- memory. A chat line every 10 minutes, and a tinted minimap button, remind you
 -- until they are all saved or skipped. (It is kept in memory only: a /reload
 -- or logout drops it.)
 
-local REMINDER_SECONDS = 60
+local REMINDER_SECONDS = 600
 
 -- A clickable "[Write them]" for chat lines. Clicking it comes back through
 -- SetItemRef (the game's handler for every chat link) as "addon:AlliesJournal:notes".
@@ -1492,7 +1492,7 @@ function ReviewPrompt:Remind()
         #names, #names == 1 and "" or "s", text, NOTES_LINK))
 end
 
--- Starts or stops the minute-by-minute reminder and the minimap tint to match
+-- Starts or stops the repeating chat reminder and the minimap tint to match
 -- whether anything is waiting.
 function ReviewPrompt:UpdateReminders()
     local waiting = self:HasWaiting()

@@ -77,6 +77,17 @@ function RosterTracker:InRaidContext()
     return IsInRaid() or self.inRaidInstance or self.lastRaid or false
 end
 
+-- These have to stay above OnLogout and TryRestoreRun: a local defined lower
+-- down isn't visible to them, and the pcall in OnLogout would hide the error.
+local function IsHandled(map, guid, runId)
+    return map[guid] and map[guid][runId] or false
+end
+
+local function MarkHandled(map, guid, runId)
+    map[guid] = map[guid] or {}
+    map[guid][runId] = true
+end
+
 -- Saves the dungeon run in progress so a /reload (or logout and straight
 -- back in) doesn't start a fresh run with no fights and a restarted time
 -- gate. Kept outside `global` (in AlliesJournalDB.runCache) so it never
@@ -176,16 +187,43 @@ function RosterTracker:RunSince(since, runId)
     return since
 end
 
-local function IsHandled(map, guid, runId)
-    return map[guid] and map[guid][runId] or false
+-- The handled guards only last for one dungeon run or one stretch of grouping,
+-- so a group you play with often would be asked about after every dungeon, and
+-- again when they leave. This one lasts: once the automatic note window has
+-- asked about someone, or you've written them a note, it leaves them alone for
+-- askAgainHours. It never gets in the way of writing a note by hand.
+-- Kept outside `global` (in AlliesJournalDB.askedAt, by nameRealm) so it never
+-- ends up in an export.
+local ASKED_KEEP_SECONDS = 7 * 86400  -- longer than the options slider goes
+
+function RosterTracker:AskedRecently(nameRealm)
+    local hours = addon.db.global.settings.askAgainHours or 12
+    if hours <= 0 then return false end
+    local cutoff = time() - hours * 3600
+
+    local asked = AlliesJournalDB.askedAt and AlliesJournalDB.askedAt[nameRealm]
+    if asked and asked > cutoff then return true end
+
+    local review = addon:GetLatestReview(nameRealm)
+    return review ~= nil and review.date > cutoff
 end
 
-local function MarkHandled(map, guid, runId)
-    map[guid] = map[guid] or {}
-    map[guid][runId] = true
+function RosterTracker:MarkAsked(nameRealm)
+    AlliesJournalDB.askedAt = AlliesJournalDB.askedAt or {}
+    AlliesJournalDB.askedAt[nameRealm] = time()
+end
+
+function RosterTracker:PruneAsked()
+    local askedAt = AlliesJournalDB.askedAt
+    if not askedAt then return end
+    local cutoff = time() - ASKED_KEEP_SECONDS
+    for nameRealm, asked in pairs(askedAt) do
+        if asked < cutoff then askedAt[nameRealm] = nil end
+    end
 end
 
 function RosterTracker:OnEnable()
+    self:PruneAsked()
     self:RegisterEvent("GROUP_ROSTER_UPDATE", "OnRosterUpdate")
     self:RegisterEvent("CHALLENGE_MODE_COMPLETED", "OnChallengeModeCompleted")
     self:RegisterEvent("LFG_COMPLETION_REWARD", "OnDungeonComplete")
@@ -592,12 +630,14 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
             alreadyQueued = self.reviewQueued[c.guid]
         end
 
-        if since and (time() - since) >= gateSeconds and not alreadyQueued then
+        if since and (time() - since) >= gateSeconds and not alreadyQueued
+            and not self:AskedRecently(c.data.nameRealm) then
             if runId then
                 MarkHandled(self.handledReview, c.guid, runId)
             else
                 self.reviewQueued[c.guid] = true
             end
+            self:MarkAsked(c.data.nameRealm)
 
             local role = c.data.role
             if unitStillValid and c.data.unit and UnitGUID(c.data.unit) == c.guid then

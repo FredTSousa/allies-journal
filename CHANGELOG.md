@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- The note window no longer keeps asking about people you play with often. Once it has asked about someone, or you've written them a note, it leaves them alone for 12 hours, even across dungeons, regrouping and a `/reload`. Change the wait in `/aj options`, Sessions tab. Sessions are still recorded, and you can still right-click a name to write a note.
+- The chat reminder about notes put off for later now comes every 10 minutes instead of every minute.
+- Fixed a `/reload` inside a dungeon starting the run over, which lost its fights, time and boss counts.
+
 ## 1.0.0
 
 - First full release, for the launch of World of Warcraft: Forever. Allies Journal is out of beta.

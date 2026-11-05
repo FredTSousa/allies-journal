@@ -169,6 +169,9 @@ function AlliesJournal:OnInitialize()
         g.settings.playerStripVersion = 1
     end
     if g.settings.playerStrip == nil then g.settings.playerStrip = true end
+    -- Hours before the automatic note window asks about the same player again
+    -- (see RosterTracker:AskedRecently). 0 turns the wait off.
+    if g.settings.askAgainHours == nil then g.settings.askAgainHours = 12 end
     -- Small chat reminders: someone you have a note on joins your group, and
     -- someone you noted as Great comes online.
     g.settings.notices = g.settings.notices or {}

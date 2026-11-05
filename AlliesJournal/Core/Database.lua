@@ -861,6 +861,7 @@ end
 -- Removes a player and everything kept about them: notes, sessions, tags, the
 -- pin and note in Recent Allies. Run notes and other players are untouched.
 function addon:ForgetPlayer(nameRealm)
+    if AlliesJournalDB.askedAt then AlliesJournalDB.askedAt[nameRealm] = nil end
     local g = self.db.global
     local record = g.players[nameRealm]
     if not record then return false end
