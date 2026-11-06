@@ -83,6 +83,7 @@ local SOURCE_FILTER_LABELS = { All = "All", favorites = "Favorites", online = "O
     recent = "In Recent Allies", other = "Not in Recent Allies" }
 -- Shown in front of a favorite's name (a raid marker; no heart in the game's art).
 local FAVORITE_MARK = "|TInterface/TargetingFrame/UI-RaidTargetingIcon_3:14|t "
+local FRIEND_MARK = " |A:groupfinder-icon-friend:18:18|a"
 local RATING_FILTERS = { "All", "good", "average", "bad", "none" }
 local RATING_FILTER_LABELS = { All = "All", good = "Great", average = "Mixed", bad = "Not great", none = "No note" }
 
@@ -1023,7 +1024,10 @@ function Browser:RefreshList()
         local passesRating = self.ratingFilter == "All" or ReviewClass(latest) == self.ratingFilter
         local recentAlly = FindRecentAllyInList(recentList, record.nameRealm)
         -- Not in Recent Allies: use the friends list, else what a /who check found, if run.
-        local friendAlly = not recentAlly and FriendStatusOf(friendStatuses, record.nameRealm) or nil
+        local friendEntry = FriendStatusOf(friendStatuses, record.nameRealm)
+        -- Remembered, because Battle.net can't name a friend's character while they're offline.
+        if friendEntry then record.friend = true end
+        local friendAlly = not recentAlly and friendEntry or nil
         local allyData = recentAlly or friendAlly or addon:GetModule("WhoCheck"):GetPseudoAlly(record.nameRealm)
         local show = self.sourceFilter
         local passesSource = show == "All"
@@ -1094,7 +1098,7 @@ function Browser:RefreshList()
             -- Online status is the card's left bar now, so no status icon here.
             -- [NR] = Not in Recent Allies (whether or not a /who check has
             -- filled in their info since).
-            local nameLine = (record.favorite and FAVORITE_MARK or '') .. RoleIconFor(latest and latest.role) .. ColoredShortName(record.nameRealm, allyData)
+            local nameLine = (record.favorite and FAVORITE_MARK or '') .. RoleIconFor(latest and latest.role) .. ColoredShortName(record.nameRealm, allyData) .. (record.friend and FRIEND_MARK or '')
             if not allyData or allyData.fromWho then
                 nameLine = nameLine .. ' |cff909090[NR]|r'
             end

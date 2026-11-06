@@ -5,6 +5,7 @@
 - Once you've written 3 notes on someone, you get a line in chat with an **[Add a note]** link instead of the note window. The link opens the same note, with that run's fights and chat. New people in the group still get the window. Change the number in `/aj options`, Sessions tab, or set it to 0 to always get the window.
 - No more "Couldn't pin" warning for your friends, who can be missing from Recent Allies. Your notes on them stay in your journal.
 - Friends in your journal now show their status automatically while they're playing: online, away or busy, plus level, class and zone, with no [NR] tag or Check Status needed. When they're offline, the game doesn't say which character is theirs, so Check Status still works as before.
+- A friend icon marks your friends in the journal list. It stays when they're offline, and it updates when you group with them.
 
 ## 1.0.1
 

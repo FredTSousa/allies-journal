@@ -398,6 +398,11 @@ function RosterTracker:OnRosterUpdate()
                 -- keeps pushing the clock back out, instead of just
                 -- letting it silently lapse between encounters.
                 if not self.roster[guid] then
+                    -- Grouped means online, when Battle.net can answer for
+                    -- certain, so this also clears someone since unfriended.
+                    local record = addon.db.global.players[nameRealm]
+                    if record then record.friend = addon:IsFriend(guid) or nil end
+
                     local review = addon:GetLatestReview(nameRealm)
                     if review then
                         addon:SyncRecentAlly(guid, review, nameRealm, true)
