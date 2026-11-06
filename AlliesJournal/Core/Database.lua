@@ -265,6 +265,72 @@ function addon:IsRecentAllyPinned(guid)
     return (ok and pinned) and true or false
 end
 
+-- Friends can be missing from Recent Allies, so a pin that never sticks on
+-- one isn't worth warning about. Their note is safe in the journal either way.
+function addon:IsFriend(guid)
+    if not guid then return false end
+    if C_FriendList and C_FriendList.IsFriend then
+        local ok, isFriend = pcall(C_FriendList.IsFriend, guid)
+        if ok and isFriend then return true end
+    end
+    if C_BattleNet and C_BattleNet.GetAccountInfoByGUID then
+        local ok, info = pcall(C_BattleNet.GetAccountInfoByGUID, guid)
+        if ok and info then return true end
+    end
+    return false
+end
+
+local function ClassIDFromName(className)
+    if not className or not GetNumClasses or not GetClassInfo then return nil end
+    for i = 1, GetNumClasses() do
+        local name, _, id = GetClassInfo(i)
+        if name == className then return id or i end
+    end
+    return nil
+end
+
+-- Looks like a Recent Allies entry so the player list can treat both the same.
+local function FriendEntry(level, className, online, afk, dnd, area)
+    return {
+        fromFriend = true,
+        characterData = { level = (level and level > 0) and level or nil, classID = ClassIDFromName(className) },
+        stateData = { isOnline = online and true or false, isAFK = afk, isDND = dnd, currentLocation = area },
+    }
+end
+
+-- Friends aren't in Recent Allies, so nothing there tracks their status: it
+-- comes from the friends list instead. Keyed by lowercase short name, because
+-- journal entries are keyed by name. The legacy character list is off on
+-- Forever (empty, confirmed in-game), which leaves Battle.net. That only
+-- reports the character a friend is playing right now, so someone offline
+-- just has no entry.
+function addon:GetFriendStatuses()
+    local statuses = {}
+    pcall(function()
+        for i = 1, C_FriendList.GetNumFriends() do
+            local info = C_FriendList.GetFriendInfoByIndex(i)
+            local short = info and self:GetShortName(info.name)
+            if short then
+                statuses[short:lower()] = FriendEntry(info.level, info.className, info.connected, info.afk, info.dnd, info.area)
+            end
+        end
+    end)
+    pcall(function()
+        local numFriends = BNGetNumFriends()
+        for i = 1, numFriends do
+            for j = 1, C_BattleNet.GetFriendNumGameAccounts(i) do
+                local game = C_BattleNet.GetFriendGameAccountInfo(i, j)
+                local short = game and game.isOnline and game.clientProgram == BNET_CLIENT_WOW
+                    and game.wowProjectID == WOW_PROJECT_ID and self:GetShortName(game.characterName)
+                if short then
+                    statuses[short:lower()] = FriendEntry(game.characterLevel, game.className, true, game.isGameAFK, game.isGameBusy, game.areaName)
+                end
+            end
+        end
+    end)
+    return statuses
+end
+
 -- The actual pin + note calls, with no verification (see SyncRecentAlly).
 function addon:ApplyRecentAlly(guid, review)
     local pinOk, pinErr = pcall(C_RecentAllies.SetRecentAllyPinned, guid, true)
@@ -376,7 +442,9 @@ function addon:SyncRecentAlly(guid, review, nameRealm, quiet)
         return false
     end
 
-    local entry = { review = snapshot, name = name, quiet = quiet, attempts = 0 }
+    -- Checked now as well as after the retries: Battle.net can only match a
+    -- GUID while they're online, and they may have logged off by then.
+    local entry = { review = snapshot, name = name, quiet = quiet, attempts = 0, isFriend = self:IsFriend(guid) }
     self.pendingRecentAllies[guid] = entry
     local delays = { 4, 20, 90, 400 }
     for i, delay in ipairs(delays) do
@@ -398,7 +466,7 @@ function addon:RetryRecentAlly(guid, isLast, onlyEntry)
         if not pending.quiet then self:Print(pending.name .. " pinned in Recent Allies.") end
     elseif isLast then
         self.pendingRecentAllies[guid] = nil
-        if not pending.quiet then
+        if not pending.quiet and not pending.isFriend and not self:IsFriend(guid) then
             self:Print(string.format("Couldn't pin %s in Recent Allies - Blizzard doesn't seem to know them yet, or the pin list may be full. /aj resyncrecentallies tries again.", pending.name))
         end
     end

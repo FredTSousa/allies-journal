@@ -373,6 +373,12 @@ local function FindRecentAlly(nameRealm)
     return FindRecentAllyInList(GetRecentAlliesList(), nameRealm)
 end
 
+-- statuses comes from addon:GetFriendStatuses(), fetched once per list refresh.
+local function FriendStatusOf(statuses, nameRealm)
+    local shortName = addon:GetShortName(nameRealm)
+    return shortName and statuses[shortName:lower()] or nil
+end
+
 -- The Recent Allies interactions that belong to one review. A review saves
 -- whatever Blizzard had logged when it was written, but entries like
 -- "Fought Together" are often logged afterwards (or the review was made
@@ -577,6 +583,38 @@ function Browser:OnEnable()
     self.roleFilter = "All"
     self.ratingFilter = "All"
     self.sourceFilter = "All"
+
+    -- Friends' status comes from the friends list, not Recent Allies.
+    -- BN_FRIEND_INFO_CHANGED is the only event for a Battle.net friend who is
+    -- already online entering the game, but it fires constantly, so the list
+    -- is batched and only redrawn when someone's status really changed.
+    local lastFriends
+    local function FriendSignature()
+        local parts = {}
+        for name, entry in pairs(addon:GetFriendStatuses()) do
+            local state = entry.stateData
+            table.insert(parts, name .. tostring(state.isOnline) .. tostring(state.isAFK)
+                .. tostring(state.isDND) .. tostring(state.currentLocation))
+        end
+        table.sort(parts)
+        return table.concat(parts, "|")
+    end
+    local function RefreshSoon()
+        if self.friendRefreshPending then return end
+        self.friendRefreshPending = true
+        C_Timer.After(2, function()
+            self.friendRefreshPending = false
+            if not (self.frame and self.frame:IsShown()) then return end
+            local ok, signature = pcall(FriendSignature)
+            if not ok or signature ~= lastFriends then
+                lastFriends = ok and signature or nil
+                self:RefreshIfShown()
+            end
+        end)
+    end
+    for _, event in ipairs({ "FRIENDLIST_UPDATE", "BN_FRIEND_ACCOUNT_ONLINE", "BN_FRIEND_ACCOUNT_OFFLINE", "BN_FRIEND_INFO_CHANGED" }) do
+        pcall(addon.RegisterEvent, addon, event, RefreshSoon)
+    end
 end
 
 function Browser:Toggle()
@@ -614,6 +652,11 @@ function Browser:ApplyColors(skipRedraw)
 end
 
 function Browser:Show()
+    -- Asks the server for fresh friend zones; FRIENDLIST_UPDATE redraws the list.
+    -- Blizzard only does this when the legacy friends list is enabled.
+    if C_FriendList and C_FriendList.IsLegacyFriendSystemEnabled and C_FriendList.IsLegacyFriendSystemEnabled() then
+        C_FriendList.ShowFriends()
+    end
     if not self.frame then
         local frame = addon:CreateWindow()
         frame.frame:SetFrameStrata("DIALOG") -- AceGUI defaults to FULLSCREEN_DIALOG, which sits above the game's confirmation popups
@@ -950,6 +993,7 @@ function Browser:RefreshList()
     -- itself is cheap (it's just reading an already-populated client-side
     -- cache), but there's no reason to call it N times for N rows.
     local recentList = GetRecentAlliesList()
+    local friendStatuses = addon:GetFriendStatuses()
 
     -- Filter first, then order: online players first (then offline, then
     -- ones with no Recent Allies entry), most recently seen first within
@@ -978,8 +1022,9 @@ function Browser:RefreshList()
         local passesRole = self.roleFilter == "All" or (latest and latest.role == self.roleFilter)
         local passesRating = self.ratingFilter == "All" or ReviewClass(latest) == self.ratingFilter
         local recentAlly = FindRecentAllyInList(recentList, record.nameRealm)
-        -- Not in Recent Allies: use what a /who check found, if run.
-        local allyData = recentAlly or addon:GetModule("WhoCheck"):GetPseudoAlly(record.nameRealm)
+        -- Not in Recent Allies: use the friends list, else what a /who check found, if run.
+        local friendAlly = not recentAlly and FriendStatusOf(friendStatuses, record.nameRealm) or nil
+        local allyData = recentAlly or friendAlly or addon:GetModule("WhoCheck"):GetPseudoAlly(record.nameRealm)
         local show = self.sourceFilter
         local passesSource = show == "All"
             or (show == "favorites" and record.favorite)
@@ -989,7 +1034,7 @@ function Browser:RefreshList()
             or (show == "recent" and recentAlly ~= nil)
             or (show == "other" and recentAlly == nil)
         if passesRole and passesRating and passesSource then
-            if not recentAlly then table.insert(self.shownNonRecent, record.nameRealm) end
+            if not recentAlly and not friendAlly then table.insert(self.shownNonRecent, record.nameRealm) end
             local presence = 2
             if allyData then
                 presence = (allyData.stateData and allyData.stateData.isOnline) and 0 or 1
@@ -1042,7 +1087,7 @@ function Browser:RefreshList()
             local infoText = allyData and InfoTextFor(allyData) or ''
             if not allyData then
                 infoText = 'not recent'
-            elseif allyData.fromWho and infoText == '' then
+            elseif (allyData.fromWho or allyData.fromFriend) and infoText == '' then
                 infoText = 'not online'
             end
 
@@ -1248,11 +1293,12 @@ function Browser:ShowHistory(nameRealm)
     end
 
     local allyData = FindRecentAlly(nameRealm)
+    local statusData = allyData or FriendStatusOf(addon:GetFriendStatuses(), nameRealm)
 
     -- Class-colored name, like the card, with the realm part left plain.
     local title = AceGUI:Create("Heading")
     local realmPart = nameRealm:match("(%-.+)$") or ""
-    title:SetText(ColoredShortName(nameRealm, allyData) .. "|cffffd100" .. realmPart .. "|r")
+    title:SetText(ColoredShortName(nameRealm, statusData) .. "|cffffd100" .. realmPart .. "|r")
     title:SetFullWidth(true)
     detail:AddChild(title)
 
@@ -1370,20 +1416,20 @@ function Browser:ShowHistory(nameRealm)
     end
 
 
-    if allyData then
+    if statusData then
         local info = AceGUI:Create("Label")
         info:SetFullWidth(true)
-        local infoText = InfoTextFor(allyData)
+        local infoText = InfoTextFor(statusData)
         -- Recent Allies also says when the pin runs out (pinExpirationDate,
         -- a unix time) - shown so it's clear how long they'll stay listed
         -- without being regrouped with.
         local pinText = ""
-        local expires = allyData.stateData and allyData.stateData.pinExpirationDate
+        local expires = statusData.stateData and statusData.stateData.pinExpirationDate
         if expires then
             local days = math.ceil((expires - time()) / 86400)
             pinText = days > 0 and ("   |cff888888pinned, " .. days .. " day(s) left|r") or "   |cffff9933pin expired|r"
         end
-        info:SetText(StatusIconFor(allyData) .. " " .. (infoText ~= "" and infoText or "no class/level data") .. pinText)
+        info:SetText(StatusIconFor(statusData) .. " " .. (infoText ~= "" and infoText or "no class/level data") .. pinText)
         detail:AddChild(info)
 
     end

@@ -110,7 +110,7 @@ function WhoCheck:Click(names)
 
     if not self.queue then
         if not names or #names == 0 then
-            addon:Print("Everyone listed is already in Recent Allies - nothing to check.")
+            addon:Print("Everyone listed is already in Recent Allies or your friends list - nothing to check.")
             return
         end
         self.queue = {}
