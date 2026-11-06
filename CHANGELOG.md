@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3
+
+- Fixed possible Lua errors when the game hides which player a unit is, while your group changes or when you add a note. Your group list catches up on the next group change.
+
 ## 1.1.2
 
 - Fixed a Lua error when you targeted a player while the game was hiding their name. Their badge and View Journal option come back once the name can be read, and Add Note asks you to try again in a moment.
