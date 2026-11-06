@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 - Once you've written 3 notes on someone, you get a line in chat with an **[Add a note]** link instead of the note window. The link opens the same note, with that run's fights and chat. New people in the group still get the window. Change the number in `/aj options`, Sessions tab, or set it to 0 to always get the window.
 - No more "Couldn't pin" warning for your friends, who can be missing from Recent Allies. Your notes on them stay in your journal.
