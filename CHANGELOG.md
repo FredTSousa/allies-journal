@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.1
 
 - Fixed friends showing as offline in the journal while they were playing, when Recent Allies said they were offline.
 
