@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fixed friends showing as offline in the journal while they were playing, when Recent Allies said they were offline.
+
 ## 1.1.0
 
 - Once you've written 3 notes on someone, you get a line in chat with an **[Add a note]** link instead of the note window. The link opens the same note, with that run's fights and chat. New people in the group still get the window. Change the number in `/aj options`, Sessions tab, or set it to 0 to always get the window.

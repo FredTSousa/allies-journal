@@ -380,6 +380,13 @@ local function FriendStatusOf(statuses, nameRealm)
     return shortName and statuses[shortName:lower()] or nil
 end
 
+-- Recent Allies can say a friend is offline while they're playing (confirmed
+-- in-game), so a friend reported as online beats their Recent Allies entry.
+local function BestStatus(friendEntry, recentAlly)
+    if friendEntry and (friendEntry.stateData.isOnline or not recentAlly) then return friendEntry end
+    return recentAlly
+end
+
 -- The Recent Allies interactions that belong to one review. A review saves
 -- whatever Blizzard had logged when it was written, but entries like
 -- "Fought Together" are often logged afterwards (or the review was made
@@ -1023,12 +1030,11 @@ function Browser:RefreshList()
         local passesRole = self.roleFilter == "All" or (latest and latest.role == self.roleFilter)
         local passesRating = self.ratingFilter == "All" or ReviewClass(latest) == self.ratingFilter
         local recentAlly = FindRecentAllyInList(recentList, record.nameRealm)
-        -- Not in Recent Allies: use the friends list, else what a /who check found, if run.
         local friendEntry = FriendStatusOf(friendStatuses, record.nameRealm)
         -- Remembered, because Battle.net can't name a friend's character while they're offline.
         if friendEntry then record.friend = true end
-        local friendAlly = not recentAlly and friendEntry or nil
-        local allyData = recentAlly or friendAlly or addon:GetModule("WhoCheck"):GetPseudoAlly(record.nameRealm)
+        -- Neither of those: use what a /who check found, if run.
+        local allyData = BestStatus(friendEntry, recentAlly) or addon:GetModule("WhoCheck"):GetPseudoAlly(record.nameRealm)
         local show = self.sourceFilter
         local passesSource = show == "All"
             or (show == "favorites" and record.favorite)
@@ -1038,7 +1044,7 @@ function Browser:RefreshList()
             or (show == "recent" and recentAlly ~= nil)
             or (show == "other" and recentAlly == nil)
         if passesRole and passesRating and passesSource then
-            if not recentAlly and not friendAlly then table.insert(self.shownNonRecent, record.nameRealm) end
+            if not recentAlly and not friendEntry then table.insert(self.shownNonRecent, record.nameRealm) end
             local presence = 2
             if allyData then
                 presence = (allyData.stateData and allyData.stateData.isOnline) and 0 or 1
@@ -1297,7 +1303,7 @@ function Browser:ShowHistory(nameRealm)
     end
 
     local allyData = FindRecentAlly(nameRealm)
-    local statusData = allyData or FriendStatusOf(addon:GetFriendStatuses(), nameRealm)
+    local statusData = BestStatus(FriendStatusOf(addon:GetFriendStatuses(), nameRealm), allyData)
 
     -- Class-colored name, like the card, with the realm part left plain.
     local title = AceGUI:Create("Heading")
@@ -1428,7 +1434,7 @@ function Browser:ShowHistory(nameRealm)
         -- a unix time) - shown so it's clear how long they'll stay listed
         -- without being regrouped with.
         local pinText = ""
-        local expires = statusData.stateData and statusData.stateData.pinExpirationDate
+        local expires = allyData and allyData.stateData and allyData.stateData.pinExpirationDate
         if expires then
             local days = math.ceil((expires - time()) / 86400)
             pinText = days > 0 and ("   |cff888888pinned, " .. days .. " day(s) left|r") or "   |cffff9933pin expired|r"
