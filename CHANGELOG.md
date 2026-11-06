@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2
+
+- Fixed a Lua error when you targeted a player while the game was hiding their name. Their badge and View Journal option come back once the name can be read, and Add Note asks you to try again in a moment.
+
 ## 1.1.1
 
 - Fixed friends showing as offline in the journal while they were playing, when Recent Allies said they were offline.
