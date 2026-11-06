@@ -906,7 +906,7 @@ function AlliesJournal:QueueUnitForReview(unit)
     end
 
     local capture = self:GetModule("ReviewCapture")
-    local guid = UnitGUID(unit)
+    local guid = self:GetUnitGUID(unit)
 
     self:GetModule("ReviewPrompt"):QueueBatch({
         {

@@ -109,6 +109,14 @@ function addon:GetFullName(unit)
     return name .. "-" .. myRealm
 end
 
+-- UnitGUID for another unit. The GUID can be "secret" on this client, and
+-- then it can't be compared or used as a table key, so it counts as no GUID.
+function addon:GetUnitGUID(unit)
+    local guid = UnitGUID(unit)
+    if guid and issecretvalue and issecretvalue(guid) then return nil end
+    return guid
+end
+
 function addon:GetPlayerName()
     return self:GetFullName("player")
 end

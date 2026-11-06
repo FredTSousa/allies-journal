@@ -359,6 +359,14 @@ function RosterTracker:OnKillExperience()
 end
 
 function RosterTracker:OnRosterUpdate()
+    -- With a GUID hidden there's no telling who is still here, and anyone
+    -- unmatched would count as having left. The next update catches up.
+    if issecretvalue then
+        for _, unit in ipairs(IterateGroupUnits()) do
+            if issecretvalue(UnitGUID(unit)) then return end
+        end
+    end
+
     local capture = addon:GetModule("ReviewCapture")
     local playerGUID = UnitGUID("player")
     local newRoster = {}
@@ -659,7 +667,7 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
             self:MarkAsked(c.data.nameRealm)
 
             local role = c.data.role
-            if unitStillValid and c.data.unit and UnitGUID(c.data.unit) == c.guid then
+            if unitStillValid and c.data.unit and addon:GetUnitGUID(c.data.unit) == c.guid then
                 role = capture:GetRole(c.data.unit) or role
             end
 

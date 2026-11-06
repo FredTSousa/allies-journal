@@ -438,7 +438,7 @@ function ReviewCapture:SaveFightsForReplay(unit)
         return
     end
 
-    local guid = UnitGUID(unit)
+    local guid = addon:GetUnitGUID(unit)
     local fights = guid and self:GetFights(guid) or {}
     if #fights == 0 then
         addon:Print("No fight data captured yet for " .. unit .. " - fight something together first, then try again.")
