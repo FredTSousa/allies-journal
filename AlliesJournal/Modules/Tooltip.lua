@@ -541,7 +541,7 @@ function Tooltip:FindNameText(unit)
     end
 
     local name = UnitName(unit)
-    if not name then
+    if not name or issecretvalue(name) then
         addon:Print("Could not get a name for " .. unit)
         return
     end

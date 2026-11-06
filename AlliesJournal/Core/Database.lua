@@ -93,9 +93,13 @@ end
 -- groupable with you, treat any second value that DOESN'T match your own
 -- realm as part of the display name (the surname) rather than a realm,
 -- and always supply the real realm ourselves.
+--
+-- Both values can be "secret" on this client. They can't be compared here
+-- or used as a table key by any caller, so a hidden name counts as no name.
 function addon:GetFullName(unit)
     local name, realm = UnitName(unit)
     if not name then return nil end
+    if issecretvalue and (issecretvalue(name) or issecretvalue(realm)) then return nil end
 
     local myRealm = GetRealmName()
     if realm and realm ~= "" and realm ~= myRealm then

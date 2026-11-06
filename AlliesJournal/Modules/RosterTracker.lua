@@ -413,6 +413,12 @@ function RosterTracker:OnRosterUpdate()
                         addon:GetModule("Notices"):PlayerJoined(nameRealm, okClass and classFile or nil)
                     end
                 end
+            elseif self.roster[guid] then
+                -- Still in the group, but the client is hiding or hasn't
+                -- loaded their name. Keep the last entry, or they'd count
+                -- as having left below and lose their fights.
+                newRoster[guid] = self.roster[guid]
+                newRoster[guid].unit = unit
             end
         end
     end

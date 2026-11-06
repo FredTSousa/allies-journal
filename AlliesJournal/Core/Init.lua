@@ -608,7 +608,8 @@ function AlliesJournal:DumpRecentAllyDetails(query)
         if selected then
             query = self:GetShortName(selected)
         elseif UnitExists("target") then
-            query = UnitName("target") or ""
+            local name = UnitName("target")
+            if name and not (issecretvalue and issecretvalue(name)) then query = name end
         end
     end
     if query == "" then
@@ -898,12 +899,18 @@ function AlliesJournal:QueueUnitForReview(unit)
         return
     end
 
+    local nameRealm = self:GetFullName(unit)
+    if not nameRealm then
+        self:Print("The game isn't showing this player's name right now. Try again in a moment.")
+        return
+    end
+
     local capture = self:GetModule("ReviewCapture")
     local guid = UnitGUID(unit)
 
     self:GetModule("ReviewPrompt"):QueueBatch({
         {
-            nameRealm = self:GetFullName(unit),
+            nameRealm = nameRealm,
             encounter = self:GetModule("RosterTracker").currentEncounterName or GetInstanceInfo() or "Manual test",
             role = capture:GetRole(unit),
             fights = guid and capture:GetFights(guid) or {},
