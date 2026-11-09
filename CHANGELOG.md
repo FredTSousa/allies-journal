@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.2.0
+
+- Players from your journal get a badge right after their name on their nameplate, the name floating over them in the world. It needs nameplates turned on for those players in the game options, and doesn't show on friendly players inside dungeons and raids, where the game hides their nameplates from addons. Turn it off or move it in `/aj options`, Badges tab. `/aj badgetest` now puts a test badge on every nameplate too.
+- New `/aj why <name>` (or target someone and type `/aj why`) tells you why the note window did or didn't open for them: the last few times a dungeon or group ended with them, what happened each time (window, chat link, added to notes you put off, or not asked, and why), and where things stand right now.
+- The journal list puts people who are online first, ordered by the color of their star (green, then yellow, then no note, then red) and then by highest level.
+- **Check Status** only looks up people you have a note on.
+- In the LFG Forever addon's window, group listings now show where their leader is too.
+- Fixed a disconnect in a dungeon starting the run over when you got back in, which lost its fights and restarted the 10-minute wait, so the note window often never opened at the end. The run is now saved as you go and is picked up again if you're back in the same dungeon within 45 minutes. `/aj why` says whether your run carried on or started over.
+- Fixed an empty box in front of chat lines with people from your journal, such as whispers you send them. The star icon shows there now, like everywhere else in chat.
+- Fixed Lua errors when right-clicking an NPC or pet, or opening a menu or Group Finder listing while the game was hiding a name.
+- Smoother with Group Finder open and while searching your journal: scrolling the listings no longer rechecks every group several times over, the journal list is rebuilt once you stop typing instead of on every key, and its size line at the top is worked out at most every 5 minutes (the Refresh button updates it now). Less work too when a raid group forms.
+
 ## 1.1.3
 
 - Fixed possible Lua errors when the game hides which player a unit is, while your group changes or when you add a note. Your group list catches up on the next group change.

@@ -88,16 +88,49 @@ local function MarkHandled(map, guid, runId)
     map[guid][runId] = true
 end
 
--- Saves the dungeon run in progress so a /reload (or logout and straight
--- back in) doesn't start a fresh run with no fights and a restarted time
--- gate. Kept outside `global` (in AlliesJournalDB.runCache) so it never
--- ends up in an export, and cleared whenever there's nothing to save.
+-- Saves the dungeon run in progress so a /reload, a relog or a disconnect
+-- doesn't start a fresh run with no fights and a restarted time gate. Kept
+-- outside `global` (in AlliesJournalDB.runCache) so it never ends up in an
+-- export.
+--
+-- Saved every RUN_SAVE_SECONDS while in a dungeon with a group, not just at
+-- logout: when the connection drops, the group can look empty (everyone
+-- "leaves" at once) before the game logs out, so a save at that moment had
+-- nothing left to save. An empty group therefore never overwrites a saved
+-- run; the run is only thrown away when you leave the dungeon normally, are
+-- back outside one, or it's too old to pick up (see TryRestoreRun).
+local RUN_SAVE_SECONDS = 60
+-- How often to check whether a save is due (a check is nearly free).
+local RUN_CHECK_SECONDS = 15
+-- How long after the last save a run can still be picked up again in the
+-- same dungeon: room for a disconnect, a client restart and a login queue.
+local RUN_RESTORE_SECONDS = 45 * 60
+
 function RosterTracker:OnLogout()
+    self:SaveRun()
+end
+
+-- Saves the run if the last save is a minute old or more, unless you're in
+-- combat (nothing runs mid-fight).
+function RosterTracker:SaveRunIfDue()
+    if InCombatLockdown() then return end
+    if self.lastRunSave and time() - self.lastRunSave < RUN_SAVE_SECONDS then return end
+    pcall(self.SaveRun, self)
+end
+
+-- A second after a fight ends: ReviewCapture records the fight on this same
+-- event, and the order the two run in isn't fixed, so waiting a moment makes
+-- sure the save includes it. If the next pull has already started by then,
+-- SaveRunIfDue skips and the next fight's end tries again.
+function RosterTracker:OnCombatEnd()
+    C_Timer.After(1, function() self:SaveRunIfDue() end)
+end
+
+function RosterTracker:SaveRun()
     local db = AlliesJournalDB
     if not db then return end
-    db.runCache = nil
     local runId = self.currentRunId
-    if not runId or not IsInGroup() or self:InRaidContext() then return end
+    if not runId or not next(self.roster) or self:InRaidContext() then return end
 
     local ok, cache = pcall(function()
         local grouped, handledReview, handledSession = {}, {}, {}
@@ -119,21 +152,40 @@ function RosterTracker:OnLogout()
             tally = self.tally,
         }
     end)
-    if ok then db.runCache = cache end
+    if ok then
+        db.runCache = cache
+        self.lastRunSave = time()
+    end
 end
 
--- Called when a dungeon is entered: if this is just a /reload (or quick
--- relog) inside the dungeon the saved run was in, carry on with it instead
--- of starting a new one. Returns true when it did.
+-- Called when a dungeon is entered: if this is a /reload, relog or
+-- reconnect inside the dungeon the saved run was in, carry on with it
+-- instead of starting a new one. Returns true when it did. What happened is
+-- kept in self.lastRestore for "/aj why".
 function RosterTracker:TryRestoreRun()
+    local function Refuse(reason)
+        self.lastRestore = { at = time(), ok = false, reason = reason }
+        return false
+    end
+
     local db = AlliesJournalDB
     local cache = db and db.runCache
-    if not cache then return false end
-    db.runCache = nil  -- used up either way; saved again at the next logout
+    if not cache then
+        -- Walking in from outside never has one; only a login or reload
+        -- straight into a dungeon is worth reporting.
+        if self.freshLoad then return Refuse("no saved run was found (the game may have closed before it could save)") end
+        return false
+    end
+    db.runCache = nil  -- used up either way; saved again while the run goes on
 
-    if type(cache) ~= "table" or not cache.runId or not cache.savedAt then return false end
-    if time() - cache.savedAt > 600 then return false end
-    if cache.mapID ~= select(8, GetInstanceInfo()) then return false end
+    if type(cache) ~= "table" or not cache.runId or not cache.savedAt then return Refuse("the saved run was unreadable") end
+    local age = time() - cache.savedAt
+    if age > RUN_RESTORE_SECONDS then
+        return Refuse(string.format("it was last saved %d minutes before you got back, more than the %d allowed",
+            math.floor(age / 60), RUN_RESTORE_SECONDS / 60))
+    end
+    if cache.mapID ~= select(8, GetInstanceInfo()) then return Refuse("it was saved in a different dungeon") end
+    self.lastRestore = { at = time(), ok = true, gap = age }
 
     local runId = cache.runId
     self.runCounter = math.max(self.runCounter, cache.runCounter or runId)
@@ -196,16 +248,47 @@ end
 -- ends up in an export.
 local ASKED_KEEP_SECONDS = 7 * 86400  -- longer than the options slider goes
 
-function RosterTracker:AskedRecently(nameRealm)
+-- Why someone counts as asked recently, or nil when they don't: "asked" (the
+-- note window asked about them) or "note" (you wrote one), when that was, and
+-- when the wait runs out. The later of the two decides.
+function RosterTracker:AskedRecentlyInfo(nameRealm)
     local hours = addon.db.global.settings.askAgainHours or 12
-    if hours <= 0 then return false end
-    local cutoff = time() - hours * 3600
+    if hours <= 0 then return nil end
+    local wait = hours * 3600
+    local cutoff = time() - wait
 
+    local kind, at
     local asked = AlliesJournalDB.askedAt and AlliesJournalDB.askedAt[nameRealm]
-    if asked and asked > cutoff then return true end
+    if asked and asked > cutoff then kind, at = "asked", asked end
 
     local review = addon:GetLatestReview(nameRealm)
-    return review ~= nil and review.date > cutoff
+    if review and review.date and review.date > cutoff and (not at or review.date > at) then
+        kind, at = "note", review.date
+    end
+
+    if not kind then return nil end
+    return kind, at, at + wait
+end
+
+function RosterTracker:AskedRecently(nameRealm)
+    return self:AskedRecentlyInfo(nameRealm) ~= nil
+end
+
+-- What happened each time a note window could have opened for someone, for
+-- "/aj why <name>": the last few per person, newest last. Kept outside
+-- `global` (in AlliesJournalDB.promptLog, by nameRealm) so it survives a
+-- /reload but never ends up in an export; pruned along with askedAt.
+-- outcome: "window", "waiting" (added to notes put off with Later), "chat"
+-- (an [Add a note] link instead of a window) or "skipped".
+local LOG_PER_PERSON = 6
+
+function RosterTracker:LogDecision(nameRealm, trigger, outcome, detail)
+    if not nameRealm or not AlliesJournalDB then return end
+    AlliesJournalDB.promptLog = AlliesJournalDB.promptLog or {}
+    local entries = AlliesJournalDB.promptLog[nameRealm] or {}
+    AlliesJournalDB.promptLog[nameRealm] = entries
+    table.insert(entries, { at = time(), trigger = trigger, outcome = outcome, detail = detail })
+    while #entries > LOG_PER_PERSON do table.remove(entries, 1) end
 end
 
 -- Enough notes on someone that a window would only be in the way: they get a
@@ -222,11 +305,19 @@ function RosterTracker:MarkAsked(nameRealm)
 end
 
 function RosterTracker:PruneAsked()
-    local askedAt = AlliesJournalDB.askedAt
-    if not askedAt then return end
     local cutoff = time() - ASKED_KEEP_SECONDS
-    for nameRealm, asked in pairs(askedAt) do
-        if asked < cutoff then askedAt[nameRealm] = nil end
+    local askedAt = AlliesJournalDB.askedAt
+    if askedAt then
+        for nameRealm, asked in pairs(askedAt) do
+            if asked < cutoff then askedAt[nameRealm] = nil end
+        end
+    end
+    local promptLog = AlliesJournalDB.promptLog
+    if promptLog then
+        for nameRealm, entries in pairs(promptLog) do
+            local last = type(entries) == "table" and entries[#entries]
+            if not last or not last.at or last.at < cutoff then promptLog[nameRealm] = nil end
+        end
     end
 end
 
@@ -240,6 +331,12 @@ function RosterTracker:OnEnable()
     -- Fires on logout and on /reload, just before the saved variables are
     -- written - the moment to save a dungeon run in progress.
     self:RegisterEvent("PLAYER_LOGOUT", "OnLogout")
+    -- And all along, so a disconnect still has a recent copy (see SaveRun):
+    -- checked often, saved at most once a minute and never mid-fight. A fight
+    -- ending is a moment to save too, so back-to-back pulls that happen to
+    -- cover every check still get saved between them.
+    C_Timer.NewTicker(RUN_CHECK_SECONDS, function() self:SaveRunIfDue() end)
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", "OnCombatEnd")
     -- Boss kills, wipes and quests handed in while grouped (for "together so
     -- far"). Guarded: an event this client doesn't know must not break loading.
     pcall(self.RegisterEvent, self, "ENCOUNTER_END", "OnEncounterEnd")
@@ -277,6 +374,9 @@ local function FormatDuration(seconds)
     seconds = math.floor(seconds or 0)
     if seconds < 60 then
         return seconds .. "s"
+    end
+    if seconds >= 3600 then
+        return string.format("%dh%02dm", math.floor(seconds / 3600), math.floor(seconds % 3600 / 60))
     end
     return string.format("%dm%02ds", math.floor(seconds / 60), seconds % 60)
 end
@@ -444,8 +544,16 @@ function RosterTracker:OnRosterUpdate()
 
     self.roster = newRoster
 
-    if #departed > 0 and not raidContext then
-        self:QueueCandidates(departed, false, runId)
+    if #departed > 0 then
+        -- Not in a group any more means you left or the group broke up.
+        local trigger = IsInGroup() and "they left the group" or "the group ended"
+        if raidContext then
+            for _, d in ipairs(departed) do
+                self:LogDecision(d.data.nameRealm, trigger, "skipped", "it was a raid - raids never open the note window")
+            end
+        else
+            self:QueueCandidates(departed, false, runId, trigger)
+        end
     end
 
     -- Gate state gets cleared AFTER QueueCandidates (and the session-
@@ -560,13 +668,20 @@ function RosterTracker:QueueDeparted(nameRealm)
 end
 
 -- runId: the dungeon run that just finished, or nil for open-world content.
-function RosterTracker:QueueEntireRoster(runId)
-    if self:InRaidContext() then return end  -- no automatic prompts in raids
+-- trigger: a few words for "/aj why", e.g. "you left the dungeon".
+function RosterTracker:QueueEntireRoster(runId, trigger)
+    trigger = trigger or "the dungeon ended"
+    if self:InRaidContext() then  -- no automatic prompts in raids
+        for _, data in pairs(self.roster) do
+            self:LogDecision(data.nameRealm, trigger, "skipped", "it was a raid - raids never open the note window")
+        end
+        return
+    end
     local candidates = {}
     for guid, data in pairs(self.roster) do
         table.insert(candidates, { guid = guid, data = data, since = self.groupedSince[guid] })
     end
-    self:QueueCandidates(candidates, true, runId)
+    self:QueueCandidates(candidates, true, runId, trigger)
     -- After the sessions above are recorded, so the counts include this run.
     if runId then
         addon:GetModule("Notices"):FamiliarFaces(candidates, runId)
@@ -639,9 +754,16 @@ end
 -- unitStillValid: true when candidates come from the live roster (instance
 -- complete) so a fresh role read is possible; false when the player has
 -- already left the group (leave/kick), where only the last cached read exists.
-function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
+-- trigger: what set this off, in a few words, for "/aj why".
+function RosterTracker:QueueCandidates(candidates, unitStillValid, runId, trigger)
+    trigger = trigger or "the group changed"
     -- "Pause recording": no new sessions and no automatic note windows.
-    if addon.db.global.settings.paused then return end
+    if addon.db.global.settings.paused then
+        for _, c in ipairs(candidates) do
+            self:LogDecision(c.data.nameRealm, trigger, "skipped", "recording was paused (/aj pause)")
+        end
+        return
+    end
     self:CheckSessionEligibility(candidates, runId)
 
     local capture = addon:GetModule("ReviewCapture")
@@ -649,6 +771,7 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
     local batch, offers = {}, {}
 
     for _, c in ipairs(candidates) do
+        local nameRealm = c.data.nameRealm
         local since = self:RunSince(c.since, runId)
         local alreadyQueued
         if runId then
@@ -656,9 +779,27 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
         else
             alreadyQueued = self.reviewQueued[c.guid]
         end
+        local askedKind, askedAt, askedUntil = self:AskedRecentlyInfo(nameRealm)
 
-        if since and (time() - since) >= gateSeconds and not alreadyQueued
-            and not self:AskedRecently(c.data.nameRealm) then
+        -- The same checks as always, in order; the first one that fails is
+        -- what "/aj why" reports.
+        local skip
+        if not since then
+            skip = "no record of when you grouped up with them"
+        elseif time() - since < gateSeconds then
+            skip = string.format("together %s of the %s needed%s", FormatDuration(time() - since),
+                FormatDuration(gateSeconds), runId and " (counted from when you entered the dungeon)" or "")
+        elseif alreadyQueued then
+            skip = runId and "already handled earlier in this dungeon run" or "already handled since you grouped up"
+        elseif askedKind then
+            skip = string.format("%s %s ago, so not asked again for another %s (\"ask again after\" in /aj options)",
+                askedKind == "note" and "you wrote a note on them" or "the note window already asked about them",
+                FormatDuration(time() - askedAt), FormatDuration(askedUntil - time()))
+        end
+
+        if skip then
+            self:LogDecision(nameRealm, trigger, "skipped", skip)
+        else
             if runId then
                 MarkHandled(self.handledReview, c.guid, runId)
             else
@@ -683,7 +824,13 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
                 fights[i] = fight
             end
 
-            table.insert(self:KnownWell(c.data.nameRealm) and offers or batch, {
+            local knownWell = self:KnownWell(nameRealm)
+            if knownWell then
+                self:LogDecision(nameRealm, trigger, "chat", string.format(
+                    "you have %d notes on them, so you got an [Add a note] link in chat instead of the window",
+                    #addon:GetReviewsForPlayer(nameRealm)))
+            end
+            table.insert(knownWell and offers or batch, {
                 nameRealm = c.data.nameRealm,
                 encounter = self:PlaceName(),
                 role = role,
@@ -699,7 +846,18 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId)
     end
 
     if #batch > 0 then
-        addon:GetModule("ReviewPrompt"):QueueBatch(batch)
+        local prompt = addon:GetModule("ReviewPrompt")
+        -- Notes put off with Later take in new people without showing anything.
+        local intoWaiting = prompt.group and prompt.groupHidden and not prompt.editingReviewID
+        for _, data in ipairs(batch) do
+            if intoWaiting then
+                self:LogDecision(data.nameRealm, trigger, "waiting",
+                    "added to the notes you put off with Later, without opening - /aj notes opens them")
+            else
+                self:LogDecision(data.nameRealm, trigger, "window", "the note window opened for them")
+            end
+        end
+        prompt:QueueBatch(batch)
     end
     if #offers > 0 then
         addon:GetModule("ReviewPrompt"):OfferInChat(offers)
@@ -714,25 +872,27 @@ function RosterTracker:OnChallengeModeCompleted()
             self.currentEncounterName = name .. " (M+)"
         end
     end
-    self:CloseRunSoon()
+    self:CloseRunSoon("you finished the Mythic+ run")
 end
 
 function RosterTracker:OnDungeonComplete()
     -- LFG_COMPLETION_REWARD only fires for Group/Raid Finder completions.
     -- Manually formed groups are caught by the zone-exit fallback below.
-    self:CloseRunSoon()
+    self:CloseRunSoon("you finished the dungeon (Group Finder)")
 end
 
 -- Finishes the current dungeon run (prompts + sessions) a moment after the
 -- completion event: the last boss fight's combat-end can arrive just after
 -- it, and that fight belongs to this run. The run id is captured now, so a
 -- fast zone change in between still resolves to the right run.
-function RosterTracker:CloseRunSoon()
+function RosterTracker:CloseRunSoon(trigger)
     local runId = self.currentRunId
-    C_Timer.After(2, function() self:QueueEntireRoster(runId) end)
+    C_Timer.After(2, function() self:QueueEntireRoster(runId, trigger) end)
 end
 
-function RosterTracker:OnZoneCheck()
+function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
+    -- A login or /reload, as opposed to a loading screen while playing.
+    self.freshLoad = event == "PLAYER_ENTERING_WORLD" and (isInitialLogin or isReloadingUi) and true or false
     local inInstance, instanceType = IsInInstance()
     local isDungeonNow = inInstance and instanceType == "party"
     self.inRaidInstance = inInstance and instanceType == "raid"
@@ -761,13 +921,162 @@ function RosterTracker:OnZoneCheck()
         -- keeps that from producing spurious prompts. It's the loosest
         -- trigger of the three - check it in-game and tighten it if it
         -- over-fires.
-        self:QueueEntireRoster(self.currentRunId)
+        self:QueueEntireRoster(self.currentRunId, "you left the dungeon")
     end
 
     if self.wasInDungeon and not isDungeonNow then
         self.instanceExitedAt = time()
         self.currentRunId = nil  -- back in the open world (lastRunId stays)
+        -- A picked-up run can carry grouped-since times for people who left
+        -- while you were disconnected; they never "leave" again to clear them.
+        for guid in pairs(self.groupedSince) do
+            if not self.roster[guid] then self.groupedSince[guid] = nil end
+        end
+    end
+
+    -- Outside a dungeon there's no run to pick up again, so a saved one
+    -- can't be carried into a later visit to the same dungeon by mistake.
+    if not isDungeonNow and AlliesJournalDB then
+        AlliesJournalDB.runCache = nil
     end
 
     self.wasInDungeon = isDungeonNow
+end
+
+----------------------------------------------------------------------
+-- "/aj why <name>": why the note window did or didn't open for someone
+----------------------------------------------------------------------
+
+-- A typed name, matched against everyone the addon knows by full or short
+-- name (case doesn't matter); empty means your target.
+function RosterTracker:ResolveWhyName(input)
+    input = strtrim(input or "")
+    if input == "" then
+        if UnitExists("target") and UnitIsPlayer("target") then return addon:GetFullName("target") end
+        return nil
+    end
+
+    local exact = addon:NormalizeChatSender(input)
+    local wanted = input:lower()
+    local function Matches(key)
+        return type(key) == "string" and (key == exact or key:lower() == wanted
+            or (addon:GetShortName(key) or ""):lower() == wanted)
+    end
+
+    for _, data in pairs(self.roster) do
+        if Matches(data.nameRealm) then return data.nameRealm end
+    end
+    local sources = {
+        self.recentDepartures,
+        AlliesJournalDB.promptLog or {},
+        AlliesJournalDB.askedAt or {},
+        addon.db.global.players,
+    }
+    for _, source in ipairs(sources) do
+        for key in pairs(source) do
+            if Matches(key) then return key end
+        end
+    end
+    return exact
+end
+
+local OUTCOME_LABELS = {
+    window = "|cff40ff40window opened|r",
+    waiting = "|cffffd100added to Later|r",
+    chat = "|cff40ff40chat link|r",
+    skipped = "|cffff9933no window|r",
+}
+
+function RosterTracker:ExplainPrompt(input)
+    local nameRealm = self:ResolveWhyName(input)
+    if not nameRealm then
+        addon:Print("Usage: /aj why <name> - or target them and type /aj why")
+        return
+    end
+    local now = time()
+    local settings = addon.db.global.settings
+    addon:Print("Note window for " .. addon:GetShortName(nameRealm) .. ":")
+
+    -- What happened each time a trigger looked at them.
+    local log = AlliesJournalDB.promptLog and AlliesJournalDB.promptLog[nameRealm]
+    if log and #log > 0 then
+        for _, e in ipairs(log) do
+            addon:Print(string.format("  %s ago, when %s: %s - %s", FormatDuration(now - (e.at or now)),
+                e.trigger or "?", OUTCOME_LABELS[e.outcome] or tostring(e.outcome), e.detail or ""))
+        end
+    else
+        addon:Print("  Nothing recorded for them yet. Either nothing has ended since this started being tracked,"
+            .. " or they were never tracked in your group - that happens when the game hides their name as they join.")
+    end
+
+    -- And where things stand right now.
+    local lines = {}
+    if settings.paused then table.insert(lines, "recording is paused (/aj pause)") end
+
+    -- Coming back into a dungeon after a reload, relog or disconnect either
+    -- carries the run on or starts it over, which restarts the clock.
+    local restore = self.lastRestore
+    if restore and now - restore.at < 4 * 3600 then
+        if restore.ok then
+            table.insert(lines, string.format("%s ago you came back into the dungeon and the run carried on (%s since it was last saved)",
+                FormatDuration(now - restore.at), FormatDuration(restore.gap)))
+        else
+            table.insert(lines, string.format("%s ago you came back into the dungeon and the run started over, because %s",
+                FormatDuration(now - restore.at), restore.reason))
+        end
+    end
+
+    local guid = self:GetGUIDForName(nameRealm)
+    if guid then
+        local runId = self:ActiveRunId()
+        local since = self:RunSince(self.groupedSince[guid], runId)
+        local gate = self:GetGateSeconds()
+        if self:InRaidContext() then
+            table.insert(lines, "you're in a raid, which never opens the note window")
+        end
+        if since then
+            local together = now - since
+            table.insert(lines, string.format("in your group for %s%s - the window needs %s%s",
+                FormatDuration(together), runId and " in this dungeon" or "", FormatDuration(gate),
+                together >= gate and " (met)" or ""))
+        end
+        local handled
+        if runId then handled = IsHandled(self.handledReview, guid, runId) else handled = self.reviewQueued[guid] end
+        if handled then
+            table.insert(lines, runId and "already handled in this dungeon run" or "already handled since you grouped up")
+        end
+    else
+        local snap = self.recentDepartures[nameRealm]
+        if snap and snap.since and snap.groupedSeconds then
+            table.insert(lines, string.format("not in your group - left %s ago, after %s together",
+                FormatDuration(now - (snap.since + snap.groupedSeconds)), FormatDuration(snap.groupedSeconds)))
+        else
+            table.insert(lines, "not in your group")
+        end
+    end
+
+    local askedKind, askedAt, askedUntil = self:AskedRecentlyInfo(nameRealm)
+    if askedKind then
+        table.insert(lines, string.format("won't be asked automatically for another %s (%s %s ago)",
+            FormatDuration(askedUntil - now),
+            askedKind == "note" and "you wrote a note" or "the window asked",
+            FormatDuration(now - askedAt)))
+    end
+
+    local noteCount = #addon:GetReviewsForPlayer(nameRealm)
+    if self:KnownWell(nameRealm) then
+        table.insert(lines, string.format("you have %d notes on them, so they get a chat link instead of the window", noteCount))
+    end
+
+    local prompt = addon:GetModule("ReviewPrompt")
+    if prompt.group and prompt.groupHidden then
+        for _, member in ipairs(prompt.group) do
+            if member.status == "pending" and member.data and member.data.nameRealm == nameRealm then
+                table.insert(lines, "a note for them is waiting with the ones you put off - /aj notes")
+                break
+            end
+        end
+    end
+
+    addon:Print("  Right now: " .. table.concat(lines, "; ") .. ".")
 end

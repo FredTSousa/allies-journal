@@ -236,6 +236,19 @@ function AlliesJournal:OnInitialize()
         b.groupRelPoint = b.groupRelPoint or "TOPRIGHT"
         b.groupOffsetX = b.groupOffsetX or -3
         b.groupOffsetY = b.groupOffsetY or -3
+        -- Nameplates: right after the end of the name text ("name"), or
+        -- placed against the nameplate frame ("plate") with the corner and
+        -- offset settings below - also the fallback when there's no
+        -- Blizzard name text to follow. Not tuned in-game yet.
+        if b.plateEnabled == nil then b.plateEnabled = true end
+        b.plateAttach = b.plateAttach or "name"
+        b.plateSize = b.plateSize or 20
+        b.plateNameOffsetX = b.plateNameOffsetX or 2
+        b.plateNameOffsetY = b.plateNameOffsetY or 0
+        b.plateAnchorPoint = b.plateAnchorPoint or "BOTTOM"
+        b.plateRelPoint = b.plateRelPoint or "TOP"
+        b.plateOffsetX = b.plateOffsetX or 0
+        b.plateOffsetY = b.plateOffsetY or 2
         -- Icon texture (shared between unit frame and LFG badges, both
         -- tinted the same way) - blank path means the flat color square.
         -- left/right/top/bottom are SetTexCoord slicing, for sprite-sheet
@@ -453,6 +466,8 @@ function AlliesJournal:SlashCommand(input)
     elseif cmd == "notes" then
         local plan = self:GetModule("ReviewPrompt")
         if rest:lower() == "skip" then plan:GroupDrop() else plan:GroupReopen() end
+    elseif cmd == "why" then
+        self:GetModule("RosterTracker"):ExplainPrompt(rest)
     elseif cmd == "nearby" then
         self:GetModule("Diary"):ShowNearby()
     elseif cmd == "streamer" then
@@ -506,6 +521,7 @@ function AlliesJournal:SlashCommand(input)
         self:Print("  /aj options (or /aj config) - open the settings window")
         self:Print("  /aj stats - print the per-category storage size breakdown (chat/meter/sessions/notes) without opening the browser")
         self:Print("  /aj notes - open the notes you put off with Later (\"/aj notes skip\" drops them)")
+        self:Print("  /aj why [name] - why the note window did or didn't open for someone (default: your target)")
         self:Print("  /aj runs - your recorded runs, with who was there and a note for each")
         self:Print("  /aj backup - make a backup of your journal now (restore from /aj options)")
         self:Print("  /aj pause - pause or resume recording (no new sessions or automatic note windows)")
@@ -542,7 +558,7 @@ function AlliesJournal:SlashCommand(input)
             self:Print("  /aj recentallies - dump C_RecentAllies system status + every cached entry, and cross-check it against your players with notes, into a copyable window")
             self:Print("  /pr recentallydebug - toggle live logging of what SetRecentAllyPinned/SetRecentAllyNote actually return when a review is saved, to debug a pin/note that isn't sticking")
             self:Print("  /aj allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) into a copyable window; defaults to the selected player or your target")
-            self:Print("  /aj badgetest - toggle a fake badge on every party/raid frame found, to check placement without a group")
+            self:Print("  /aj badgetest - toggle a fake badge on every party/raid frame and nameplate found, to check placement without a group")
         end
     end
 end

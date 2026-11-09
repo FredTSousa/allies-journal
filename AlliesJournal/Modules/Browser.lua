@@ -94,6 +94,22 @@ local function ReviewClass(review)
     return "average"
 end
 
+-- Sort rank of a card's star color (the worse of the two ratings, like the
+-- badge): green 1, yellow 2, no note 3, red 4.
+local STAR_RANK = { good = 1, average = 2, bad = 4 }
+local function StarRank(review)
+    if not review then return 3 end
+    local s, p = STAR_RANK[review.social], STAR_RANK[review.performance]
+    if not s and not p then return 2 end
+    return math.max(s or 0, p or 0)
+end
+
+-- Level from a Recent Allies / friend / who entry, 0 when unknown.
+local function LevelOf(allyData)
+    local level = allyData and allyData.characterData and allyData.characterData.level
+    return type(level) == "number" and level or 0
+end
+
 -- Custom AceGUI widget for one row of the player list. Built as its own
 -- widget type (instead of decorating InteractiveLabel/Label) because:
 --  * Label recomputes its own height from its text whenever List layout
@@ -370,6 +386,25 @@ local function FindRecentAllyInList(list, nameRealm)
     return nil
 end
 
+-- Recent Allies by lowercase full name, built once per list refresh so
+-- each journal row is a table lookup instead of a walk through the whole
+-- list (the list refresh did that twice per player). First entry wins,
+-- like FindRecentAllyInList.
+local function IndexRecentAllies(list)
+    local index = {}
+    for _, allyData in ipairs(list or {}) do
+        local charData = allyData.characterData
+        local key = charData and type(charData.fullName) == "string" and charData.fullName:lower()
+        if key and not index[key] then index[key] = allyData end
+    end
+    return index
+end
+
+local function AllyFromIndex(index, nameRealm)
+    local shortName = addon:GetShortName(nameRealm)
+    return shortName and index[shortName:lower()] or nil
+end
+
 local function FindRecentAlly(nameRealm)
     return FindRecentAllyInList(GetRecentAlliesList(), nameRealm)
 end
@@ -507,7 +542,7 @@ StaticPopupDialogs["ALLIESJOURNAL_DELETE_REVIEW"] = {
         addon:DeleteReview(data.nameRealm, data.reviewID)
         local browser = addon:GetModule("Browser")
         browser:RefreshList()
-        browser:RefreshStats()
+        browser:RefreshStats(true)
         browser:ShowHistory(data.nameRealm)
     end,
     timeout = 0,
@@ -529,7 +564,7 @@ StaticPopupDialogs["ALLIESJOURNAL_CLEANUP_SESSIONS"] = {
         addon:Print(string.format("Cleaned up %d old session(s).", removed))
         local browser = addon:GetModule("Browser")
         browser:RefreshList()
-        browser:RefreshStats()
+        browser:RefreshStats(true)
     end,
     timeout = 0,
     whileDead = true,
@@ -776,7 +811,7 @@ function Browser:Refresh()
         -- showed IsRecentAllyDataReady is true without ever requesting it,
         -- so this button just re-reads whatever's already cached.
         self:RefreshList()
-        self:RefreshStats()
+        self:RefreshStats(true)
     end)
     buttonRow:AddChild(refreshBtn)
 
@@ -809,7 +844,7 @@ function Browser:Refresh()
     whoBtn:SetCallback("OnEnter", function(widget)
         GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
         GameTooltip:SetText("Check players not in Recent Allies", 1, 1, 1)
-        GameTooltip:AddLine("Players marked [NR] aren't in Blizzard's Recent Allies, so their online status is unknown. This runs /who on them to see whether they are online, plus their level, class and location. The game only allows one /who per click, so click once per player (at least 5 seconds apart).", nil, nil, nil, true)
+        GameTooltip:AddLine("Players marked [NR] aren't in Blizzard's Recent Allies, so their online status is unknown. This runs /who on the ones you have a note on to see whether they are online, plus their level, class and location. The game only allows one /who per click, so click once per player (at least 5 seconds apart).", nil, nil, nil, true)
         local progress = addon:GetModule("WhoCheck"):ProgressLines()
         if progress then
             GameTooltip:AddLine(" ")
@@ -856,7 +891,7 @@ function Browser:Refresh()
     search:SetCallback("OnLeave", function() GameTooltip:Hide() end)
     search:SetCallback("OnTextChanged", function(widget, event, text)
         self.searchText = text
-        self:RefreshList()
+        self:RefreshListSoon()
     end)
     frame:AddChild(search)
 
@@ -946,9 +981,14 @@ function Browser:ClearSelection()
     self:Refresh()
 end
 
-function Browser:RefreshStats()
+-- The header's sizes are worked out at most every STATS_MAX_AGE seconds
+-- (see GetStorageStats): this runs after every saved note and every friend
+-- status change while the journal is open. force = right now, for the
+-- Refresh button and after deleting or cleaning up.
+local STATS_MAX_AGE = 300
+function Browser:RefreshStats(force)
     if not self.statsLabel then return end
-    local s = addon:GetStorageStats()
+    local s = addon:GetStorageStats(not force and STATS_MAX_AGE or nil)
     self.statsLabel:SetText(string.format(
         "%d player(s) | %d session(s) | %d notes" .. (addon.db.global.settings.paused and "  |cffff9933recording paused|r" or "") .. "\nChat %s  ·  Sessions %s  ·  Notes %s  ·  Players %s  ·  Total %s",
         s.playerCount, s.sessionCount, s.reviewCount,
@@ -972,7 +1012,7 @@ function Browser:ShowCleanupConfirm()
     StaticPopup_Show("ALLIESJOURNAL_CLEANUP_SESSIONS", message, nil, { eligible = eligible })
 end
 
--- /who every listed player Recent Allies has no entry for.
+-- /who every listed player with a note that Recent Allies has no entry for.
 -- Uses the players currently shown (RefreshList records them), so the
 -- search, role, review and Recent Allies filters all apply.
 function Browser:CheckOfflineStatus()
@@ -992,6 +1032,17 @@ function Browser:UpdateWhoButton()
     end
 end
 
+-- For typing in the search box: rebuilds the list once typing pauses
+-- instead of after every key (each rebuild remakes every card).
+local SEARCH_DELAY = 0.2
+function Browser:RefreshListSoon()
+    self.searchToken = (self.searchToken or 0) + 1
+    local token = self.searchToken
+    C_Timer.After(SEARCH_DELAY, function()
+        if self.searchToken == token then self:RefreshList() end
+    end)
+end
+
 function Browser:RefreshList()
     local scroll = self.listContainer
     if not scroll then return end
@@ -1000,17 +1051,18 @@ function Browser:RefreshList()
     -- Fetched once for the whole list, not once per row - GetRecentAllies
     -- itself is cheap (it's just reading an already-populated client-side
     -- cache), but there's no reason to call it N times for N rows.
-    local recentList = GetRecentAlliesList()
+    local allyIndex = IndexRecentAllies(GetRecentAlliesList())
     local friendStatuses = addon:GetFriendStatuses()
 
     -- Filter first, then order: online players first (then offline, then
-    -- ones with no Recent Allies entry), most recently seen first within
-    -- each group.
+    -- ones with no status at all). Online players go by star color, then
+    -- highest level; the others favorites first. Ties: most recently seen,
+    -- then name.
     local entries = {}
     self.shownNonRecent = {}
     -- For players saved before classes were stored, Recent Allies knows it.
     local function ClassFileOf(record)
-        local ally = FindRecentAllyInList(recentList, record.nameRealm)
+        local ally = AllyFromIndex(allyIndex, record.nameRealm)
         local classID = ally and ally.characterData and ally.characterData.classID
         if not classID then return nil end
         local ok, info = pcall(C_CreatureInfo.GetClassInfo, classID)
@@ -1029,7 +1081,7 @@ function Browser:RefreshList()
         local latest = addon:GetLatestReview(record.nameRealm)
         local passesRole = self.roleFilter == "All" or (latest and latest.role == self.roleFilter)
         local passesRating = self.ratingFilter == "All" or ReviewClass(latest) == self.ratingFilter
-        local recentAlly = FindRecentAllyInList(recentList, record.nameRealm)
+        local recentAlly = AllyFromIndex(allyIndex, record.nameRealm)
         local friendEntry = FriendStatusOf(friendStatuses, record.nameRealm)
         -- Remembered, because Battle.net can't name a friend's character while they're offline.
         if friendEntry then record.friend = true end
@@ -1044,7 +1096,8 @@ function Browser:RefreshList()
             or (show == "recent" and recentAlly ~= nil)
             or (show == "other" and recentAlly == nil)
         if passesRole and passesRating and passesSource then
-            if not recentAlly and not friendEntry then table.insert(self.shownNonRecent, record.nameRealm) end
+            -- Only people with a note are worth a /who click.
+            if latest and not recentAlly and not friendEntry then table.insert(self.shownNonRecent, record.nameRealm) end
             local presence = 2
             if allyData then
                 presence = (allyData.stateData and allyData.stateData.isOnline) and 0 or 1
@@ -1054,14 +1107,27 @@ function Browser:RefreshList()
     end
     table.sort(entries, function(x, y)
         if x.presence ~= y.presence then return x.presence < y.presence end
-        local xf, yf = x.record.favorite and 0 or 1, y.record.favorite and 0 or 1
-        if xf ~= yf then return xf < yf end
+        if x.presence == 0 then
+            -- Online: by star color (green, yellow, no note, then red), then highest level.
+            local xr, yr = StarRank(x.latest), StarRank(y.latest)
+            if xr ~= yr then return xr < yr end
+            local xl, yl = LevelOf(x.allyData), LevelOf(y.allyData)
+            if xl ~= yl then return xl > yl end
+        else
+            local xf, yf = x.record.favorite and 0 or 1, y.record.favorite and 0 or 1
+            if xf ~= yf then return xf < yf end
+        end
         local xs = x.record.lastSeen.date or 0
         local ys = y.record.lastSeen.date or 0
         if xs ~= ys then return xs > ys end
         return x.record.nameRealm < y.record.nameRealm
     end)
 
+    -- AceGUI lays the whole list out again on every AddChild, so adding N
+    -- cards one by one cost N full layouts. Paused while the cards go in,
+    -- then laid out once; pcall so an error can't leave it paused for good.
+    scroll:PauseLayout()
+    local built, buildErr = pcall(function()
     -- Same gap above the first card as between cards.
     local topPad = AceGUI:Create('PRPlayerCard')
     topPad:SetFullWidth(true)
@@ -1139,6 +1205,10 @@ function Browser:RefreshList()
             scroll:AddChild(card)
         end
     end
+    end)
+    scroll:ResumeLayout()
+    scroll:DoLayout()
+    if not built then error(buildErr, 0) end
 end
 
 -- Small helpers for the Reviews / Sessions sections: each entry is a few

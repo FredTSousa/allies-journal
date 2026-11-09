@@ -466,6 +466,42 @@ local function BuildBadges(scroll)
             "Badge corner", "Frame corner it attaches to")
     end)
 
+    Section(scroll, "Nameplates", function(group)
+        AddNote(group, "The names floating over players in the world. Needs nameplates turned on for that kind of player (friendly or enemy) in the game's options. The game hides friendly nameplates from addons inside dungeons and raids, so no badge there.")
+        AddCheckbox(group, "Show a badge on nameplates",
+            function() return badgeSettings.plateEnabled end,
+            function(v)
+                badgeSettings.plateEnabled = v
+                Options:Refresh()
+            end)
+        AddDropdown(group, "Where it goes",
+            { name = "Right of the name", plate = "Against the nameplate frame" }, { "name", "plate" },
+            function() return badgeSettings.plateAttach end,
+            function(v) badgeSettings.plateAttach = v end)
+        AddSlider(group, "Size", 6, 64, 1,
+            function() return badgeSettings.plateSize end,
+            function(v) badgeSettings.plateSize = v end)
+        AddSlider(group, "Gap after name", -50, 50, 1,
+            function() return badgeSettings.plateNameOffsetX end,
+            function(v) badgeSettings.plateNameOffsetX = v end, 0.5)
+        AddSlider(group, "Up/down", -50, 50, 1,
+            function() return badgeSettings.plateNameOffsetY end,
+            function(v) badgeSettings.plateNameOffsetY = v end, 0.5)
+        AddNote(group, "Against the nameplate frame, also used when there's no game name text to follow (a nameplate addon drawing its own):")
+        AddDropdown(group, "Badge corner", ANCHOR_LABELS, ANCHOR_POINTS,
+            function() return badgeSettings.plateAnchorPoint end,
+            function(v) badgeSettings.plateAnchorPoint = v end, 0.5)
+        AddDropdown(group, "Nameplate corner it attaches to", ANCHOR_LABELS, ANCHOR_POINTS,
+            function() return badgeSettings.plateRelPoint end,
+            function(v) badgeSettings.plateRelPoint = v end, 0.5)
+        AddSlider(group, "Offset X", -200, 200, 1,
+            function() return badgeSettings.plateOffsetX end,
+            function(v) badgeSettings.plateOffsetX = v end, 0.5)
+        AddSlider(group, "Offset Y", -200, 200, 1,
+            function() return badgeSettings.plateOffsetY end,
+            function(v) badgeSettings.plateOffsetY = v end, 0.5)
+    end)
+
     Section(scroll, "Group Finder rows", function(group)
         BuildBadgePlacement(group, badgeSettings, "lfg",
             "Badge corner", "Element corner it attaches to")
@@ -476,7 +512,7 @@ local function BuildBadges(scroll)
     end)
 
     Section(scroll, "Badge icon", function(group)
-        AddNote(group, "Shared by both badges, tinted by how it went with that player (the worse of Social and Performance). A blank path draws a flat color square. Tex coords slice one image out of a sprite sheet (the Star preset shows half its file); 0,1,0,1 is the whole image.")
+        AddNote(group, "Shared by all badges, tinted by how it went with that player (the worse of Social and Performance). A blank path draws a flat color square. Tex coords slice one image out of a sprite sheet (the Star preset shows half its file); 0,1,0,1 is the whole image.")
 
         local pathBox, coordBox
         local function CoordText()
@@ -604,6 +640,7 @@ function Options:ResetAll()
         lfgSize = 42, lfgAnchorPoint = "CENTER", lfgRelPoint = "CENTER", lfgOffsetX = 193, lfgOffsetY = -5,
         lfgAnchorTarget = "frame",
         groupSize = 16, groupAnchorPoint = "TOPRIGHT", groupRelPoint = "TOPRIGHT", groupOffsetX = -3, groupOffsetY = -3,
+        plateEnabled = true, plateAttach = "name", plateSize = 20, plateNameOffsetX = 2, plateNameOffsetY = 0, plateAnchorPoint = "BOTTOM", plateRelPoint = "TOP", plateOffsetX = 0, plateOffsetY = 2,
         icon = { path = "Interface\\COMMON\\FavoritesIcon", left = 0, right = 1, top = 0, bottom = 1 },
     }
     settings.tooltip = {

@@ -630,8 +630,26 @@ function addon:GetReviewsForPlayer(nameRealm)
     return reviews
 end
 
+-- The newest note on someone, or nil. Called from every busy path (each chat
+-- line, unit frame and nameplate update, tooltip, Group Finder member), so it
+-- just walks the player's few note ids for the newest date: no new table and
+-- no sort, unlike GetReviewsForPlayer.
 function addon:GetLatestReview(nameRealm)
-    return (self:GetReviewsForPlayer(nameRealm))[1]
+    if not nameRealm then return nil end
+    local record = self.db.global.players[nameRealm]
+    if not record or not record.reviews then return nil end
+    local reviews = self.db.global.reviews
+    local latest, latestDate
+    for _, id in ipairs(record.reviews) do
+        local review = reviews[id]
+        if review then
+            local date = review.date or 0
+            if not latest or date > latestDate then
+                latest, latestDate = review, date
+            end
+        end
+    end
+    return latest
 end
 
 -- Reviewed players only - this is what LFGAnnotate's badge matching and
@@ -1383,26 +1401,43 @@ end
 -- from one aggregate number. Sessions are deliberately compact (no chat,
 -- no per-fight detail) so they get one bucket rather than a sub-split.
 -- Rendered in Browser's header and reachable via /pr stats.
-function addon:GetStorageStats()
+--
+-- The sizes mean writing the whole journal out as text, about twice over,
+-- which is slow on a big journal. maxAge (seconds) lets a caller reuse the
+-- last sizes when they're recent enough; the counts are always fresh. With
+-- no maxAge everything is worked out now.
+function addon:GetStorageStats(maxAge)
     local g = self.db.global
-    local chatBytes, reviewsBytes = 0, 0
     local sessionCount, reviewCount, playerCount = 0, 0, 0
-
-    for _, review in pairs(g.reviews) do
-        local c, r = ReviewSizeParts(self, review)
-        chatBytes = chatBytes + c
-        reviewsBytes = reviewsBytes + r
-        reviewCount = reviewCount + 1
-    end
+    for _ in pairs(g.reviews) do reviewCount = reviewCount + 1 end
     for _ in pairs(g.sessions) do sessionCount = sessionCount + 1 end
     for _ in pairs(g.players) do playerCount = playerCount + 1 end
 
+    local sizes = self.storageSizes
+    if not (maxAge and sizes and GetTime() - sizes.at < maxAge) then
+        local chatBytes, reviewsBytes = 0, 0
+        for _, review in pairs(g.reviews) do
+            local c, r = ReviewSizeParts(self, review)
+            chatBytes = chatBytes + c
+            reviewsBytes = reviewsBytes + r
+        end
+        sizes = {
+            at = GetTime(),
+            chatBytes = chatBytes,
+            reviewsBytes = reviewsBytes,
+            sessionsBytes = self:EstimateSize(g.sessions),
+            playersBytes = self:EstimateSize(g.players),
+            totalBytes = self:EstimateSize(g),
+        }
+        self.storageSizes = sizes
+    end
+
     return {
-        chatBytes = chatBytes,
-        reviewsBytes = reviewsBytes,
-        sessionsBytes = self:EstimateSize(g.sessions),
-        playersBytes = self:EstimateSize(g.players),
-        totalBytes = self:EstimateSize(g),
+        chatBytes = sizes.chatBytes,
+        reviewsBytes = sizes.reviewsBytes,
+        sessionsBytes = sizes.sessionsBytes,
+        playersBytes = sizes.playersBytes,
+        totalBytes = sizes.totalBytes,
         sessionCount = sessionCount,
         reviewCount = reviewCount,
         playerCount = playerCount,

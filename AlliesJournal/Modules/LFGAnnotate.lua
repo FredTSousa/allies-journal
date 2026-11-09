@@ -33,23 +33,36 @@ local MAX_DEPTH = 4
 -- region is guaranteed visible (its text is what's on screen), unlike
 -- the outer row frame, whose bounds/clipping don't necessarily match its
 -- visible content in a pooled ScrollBox list.
+-- Named (not inline) so the walk below, which runs for every row several
+-- times a second, doesn't build a new function for each frame it visits.
+local function AddFontStrings(out, ...)
+    for i = 1, select("#", ...) do
+        local region = select(i, ...)
+        if region.GetObjectType and region:GetObjectType() == "FontString" then
+            local text = region:GetText()
+            if text and text ~= "" then out[#out + 1] = { text = text, region = region } end
+        end
+    end
+end
+
+local function AddRegionsOf(out, frame)
+    AddFontStrings(out, frame:GetRegions())
+end
+
+local function PackChildren(frame)
+    return { frame:GetChildren() }
+end
+
 local function CollectFontStrings(frame, depth, out)
     if depth > MAX_DEPTH or not frame then return end
     if frame.IsForbidden and frame:IsForbidden() then return end
 
     if frame.GetRegions then
-        pcall(function()
-            for _, region in ipairs({ frame:GetRegions() }) do
-                if region.GetObjectType and region:GetObjectType() == "FontString" then
-                    local text = region:GetText()
-                    if text and text ~= "" then table.insert(out, { text = text, region = region }) end
-                end
-            end
-        end)
+        pcall(AddRegionsOf, out, frame)
     end
 
     if frame.GetChildren then
-        local ok, children = pcall(function() return { frame:GetChildren() } end)
+        local ok, children = pcall(PackChildren, frame)
         if ok then
             for _, child in ipairs(children) do
                 CollectFontStrings(child, depth + 1, out)
@@ -135,7 +148,14 @@ end
 -- re-set - or hidden - on every scan, so a recycled row never keeps
 -- another listing's area). If the activity text can't be found it falls
 -- back to a fixed corner of the row (settings.lfg.loc*).
-local function UpdateRowLocation(frame, area, activityFS)
+--
+-- foreverRow: a row in LFG Forever's own window, whose activity line is
+-- "Activity | Playstyle" on a group row (core/listpanel.lua UpdateZone /
+-- UpdatePlaystyle: its own zone text is only filled in on SOLO rows). The
+-- area hangs off the end of that line - after its playstyle FontString when
+-- shown, else after ActivityName - in its "|" separator, so it can't overlap
+-- the playstyle that sits right after the activity name.
+local function UpdateRowLocation(frame, area, activityFS, foreverRow)
     local text = frame.AlliesJournalAreaText
     if not area then
         if text then text:Hide() end
@@ -148,7 +168,12 @@ local function UpdateRowLocation(frame, area, activityFS)
         frame.AlliesJournalAreaText = text
     end
     text:ClearAllPoints()
-    if activityFS then
+    if foreverRow and frame.ActivityName then
+        local playstyle = frame.LFGFPlaystyle
+        local after = (playstyle and playstyle:IsShown()) and playstyle or frame.ActivityName
+        text:SetPoint("BOTTOMLEFT", after, "BOTTOMRIGHT", 4, 0)
+        text:SetText("|| " .. area)
+    elseif activityFS then
         text:SetPoint("LEFT", activityFS, "RIGHT", 4, 0)
         text:SetText("- " .. area)
     else
@@ -228,7 +253,72 @@ end
 -- Adds each match's inner frame to `activeFrames` so the caller can hide
 -- badges on frames that stop matching. Returns the number of badges
 -- shown, for debug counting.
-local function UpdateRowBadge(row, textCounter, activeFrames, noLocation)
+--
+-- A value the client hides from addons in lockdown ("secret") errors when
+-- compared, so anything compared below is checked first where the client
+-- has canaccessvalue (it doesn't exist on every flavor).
+local function Readable(value)
+    if value == nil then return nil end
+    if canaccessvalue and not canaccessvalue(value) then return nil end
+    return value
+end
+
+-- What one listing needs, looked up once and reused for RESULT_CACHE_SECONDS:
+-- the scan runs several times a second while the list is open, and asking
+-- the game about every member of every listing each time added up. A short
+-- life (rather than exact invalidation) keeps it simple: a note you just
+-- wrote, a member who just joined or the leader moving zone shows within
+-- that time. A new search clears everything (ClearResultCache).
+-- { at, review, memberName, isLeader, numMembers, area }
+local RESULT_CACHE_SECONDS = 2
+local resultCache = {}
+
+local function ClearResultCache()
+    wipe(resultCache)
+end
+
+local function LookupResult(resultID, debugText)
+    local now = GetTime()
+    local cached = resultCache[resultID]
+    if cached and now - cached.at < RESULT_CACHE_SECONDS and not LFGAnnotate.debug then
+        return cached
+    end
+
+    local okInfo, info = pcall(C_LFGList.GetSearchResultInfo, resultID)
+    if not (okInfo and type(info) == "table") then
+        if LFGAnnotate.debug then
+            addon:Print(string.format("[lfg debug] resultID=%s found on frame but GetSearchResultInfo failed: ok=%s info=%s",
+                tostring(resultID), tostring(okInfo), tostring(info)))
+        end
+        resultCache[resultID] = nil
+        return nil
+    end
+    local numMembers = Readable(info.numMembers)
+    if LFGAnnotate.debug then
+        addon:Print(string.format("[lfg debug] resultID=%s (%q) numMembers=%s",
+            tostring(resultID), tostring(debugText), tostring(numMembers)))
+    end
+
+    local result = { at = now, numMembers = numMembers }
+    result.review, result.memberName, result.isLeader = FindReviewedMember(resultID, numMembers or 1)
+
+    -- The leader's current area. Looked up whenever the option is on; the
+    -- caller decides whether this row shows it.
+    if addon.db.global.settings.lfg.showLocation then
+        local okLeader, leader = pcall(C_LFGList.GetSearchResultLeaderInfo, resultID)
+        local areaName = okLeader and type(leader) == "table" and Readable(leader.areaName)
+        if areaName and areaName ~= "" then result.area = areaName end
+    end
+
+    resultCache[resultID] = result
+    return result
+end
+
+-- foreverWindow: the row is in LFG Forever's window, which already shows a
+-- solo listing's zone itself - so the leader's area is only added to GROUP
+-- listings there. numMembers unreadable counts as "not a group": a missing
+-- location beats a doubled one.
+local function UpdateRowBadge(row, textCounter, activeFrames, foreverWindow)
     local entries = {}
     CollectFontStrings(row, 0, entries)
     if textCounter then textCounter[1] = textCounter[1] + #entries end
@@ -245,23 +335,32 @@ local function UpdateRowBadge(row, textCounter, activeFrames, noLocation)
             local resultID = innerFrame and innerFrame.resultID
             if resultID and not matchedFrames[innerFrame] then
                 matchedFrames[innerFrame] = true
-                local okInfo, info = pcall(C_LFGList.GetSearchResultInfo, resultID)
-                if okInfo and type(info) == "table" then
-                    if LFGAnnotate.debug then
-                        addon:Print(string.format("[lfg debug] resultID=%d (%q) numMembers=%s",
-                            resultID, tostring(entry.text), tostring(info.numMembers)))
-                    end
-                    local review, memberName, isLeader = FindReviewedMember(resultID, info.numMembers or 1)
+                local result = LookupResult(resultID, entry.text)
+                if result then
+                    local review, memberName, isLeader = result.review, result.memberName, result.isLeader
 
                     -- The leader's current area, shown on the row.
                     local area
-                    if addon.db.global.settings.lfg.showLocation and not noLocation then
-                        local okLeader, leader = pcall(C_LFGList.GetSearchResultLeaderInfo, resultID)
-                        if okLeader and type(leader) == "table" and leader.areaName and leader.areaName ~= "" then
-                            area = leader.areaName
+                    if addon.db.global.settings.lfg.showLocation then
+                        area = result.area
+                        if foreverWindow and not (result.numMembers and result.numMembers > 1) then
+                            area = nil
                         end
                     end
-                    UpdateRowLocation(innerFrame, area, area and FindActivityFontString(innerFrame, entries))
+                    -- Same listing and area on the same frame as last scan:
+                    -- the text is already there, so skip the re-layout
+                    -- (FindActivityFontString measures every text on the row).
+                    -- Not for the fixed-corner fallback, whose spot can be
+                    -- moved live in the options.
+                    if not (area and innerFrame.AlliesJournalLocAnchored
+                            and innerFrame.AlliesJournalLocID == resultID
+                            and innerFrame.AlliesJournalLocArea == area) then
+                        local activityFS = area and not foreverWindow and FindActivityFontString(innerFrame, entries)
+                        UpdateRowLocation(innerFrame, area, activityFS, foreverWindow)
+                        innerFrame.AlliesJournalLocID = area and resultID or nil
+                        innerFrame.AlliesJournalLocArea = area
+                        innerFrame.AlliesJournalLocAnchored = area and (activityFS or (foreverWindow and innerFrame.ActivityName)) and true or nil
+                    end
 
                     if review then
                         innerFrame.AlliesJournalCurrent = review
@@ -302,9 +401,6 @@ local function UpdateRowBadge(row, textCounter, activeFrames, noLocation)
                         innerFrame.AlliesJournalNameRealm = nil
                         innerFrame.AlliesJournalMemberNote = nil
                     end
-                elseif LFGAnnotate.debug then
-                    addon:Print(string.format("[lfg debug] resultID=%d found on frame but GetSearchResultInfo failed: ok=%s info=%s",
-                        resultID, tostring(okInfo), tostring(info)))
                 end
             end
         end
@@ -316,7 +412,9 @@ end
 -- The "LFG Forever" addon opens its own Group Finder window (a global frame,
 -- LFGForeverFrame) whose list uses the same row template as Blizzard's, so the
 -- same row updater works on it. Silent when that addon isn't installed. Its
--- window shows each listing's zone itself, so the location text is skipped.
+-- window shows a SOLO listing's zone itself (from the player's own info) but
+-- nothing on group listings, so only group rows get the leader's area here
+-- (see UpdateRowBadge's foreverWindow).
 local function FindScrollBoxes(frame, depth, out)
     if depth > 6 or not frame or not frame.GetChildren then return end
     if frame.IsForbidden and frame:IsForbidden() then return end
@@ -346,7 +444,7 @@ function LFGAnnotate:ScanForever()
                     if box.RegisterCallback and ScrollBoxListViewMixin and ScrollBoxListViewMixin.Event
                         and ScrollBoxListViewMixin.Event.OnAcquiredFrame then
                         box:RegisterCallback(ScrollBoxListViewMixin.Event.OnAcquiredFrame, function()
-                            pcall(LFGAnnotate.ScanForever, LFGAnnotate)
+                            LFGAnnotate:RequestScan()
                         end, LFGAnnotate)
                     end
                 end)
@@ -369,6 +467,19 @@ end
 -- (see UpdateRowBadge) made unnecessary. Callers that still pass an
 -- argument (the ticker, LFG_LIST_SEARCH_RESULTS_RECEIVED) are harmless -
 -- Lua just ignores the extra value.
+-- Scrolling fires the wheel, scrollbar and row-acquired hooks many times in
+-- one frame (once per row recycled), and each used to run a full scan.
+-- They all ask for one here instead, done once on the next frame - after
+-- the recycled rows have been filled in with their new listing.
+function LFGAnnotate:RequestScan()
+    if self.scanPending then return end
+    self.scanPending = true
+    C_Timer.After(0, function()
+        self.scanPending = false
+        self:ScanBrowseResults()
+    end)
+end
+
 function LFGAnnotate:ScanBrowseResults()
     pcall(self.ScanForever, self)
     local scrollBox = _G["LFGBrowseFrameScrollBox"]
@@ -390,11 +501,11 @@ function LFGAnnotate:ScanBrowseResults()
     -- the ticker alone) if either hook point doesn't exist.
     if not self.scrollHooked then
         pcall(function()
-            scrollBox:HookScript("OnMouseWheel", function() LFGAnnotate:ScanBrowseResults() end)
+            scrollBox:HookScript("OnMouseWheel", function() LFGAnnotate:RequestScan() end)
         end)
         pcall(function()
             if scrollBox.ScrollBar then
-                scrollBox.ScrollBar:HookScript("OnValueChanged", function() LFGAnnotate:ScanBrowseResults() end)
+                scrollBox.ScrollBar:HookScript("OnValueChanged", function() LFGAnnotate:RequestScan() end)
             end
         end)
         -- Confirmed via /pr lfginspect + this diagnostic block itself:
@@ -411,7 +522,7 @@ function LFGAnnotate:ScanBrowseResults()
             if scrollBox.RegisterCallback and ScrollBoxListViewMixin and ScrollBoxListViewMixin.Event
                 and ScrollBoxListViewMixin.Event.OnAcquiredFrame then
                 scrollBox:RegisterCallback(ScrollBoxListViewMixin.Event.OnAcquiredFrame, function()
-                    LFGAnnotate:ScanBrowseResults()
+                    LFGAnnotate:RequestScan()
                 end, LFGAnnotate)
                 return true
             end
@@ -730,7 +841,10 @@ end
 
 function LFGAnnotate:OnEnable()
     local ok, err = pcall(function()
-        self:RegisterEvent("LFG_LIST_SEARCH_RESULTS_RECEIVED", function() self:ScanBrowseResults() end)
+        self:RegisterEvent("LFG_LIST_SEARCH_RESULTS_RECEIVED", function()
+            ClearResultCache()
+            self:RequestScan()
+        end)
     end)
     if not ok then addon:Print("|cffff4040LFG event hook failed|r: " .. tostring(err)) end
 
