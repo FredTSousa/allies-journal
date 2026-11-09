@@ -299,7 +299,8 @@ function Diary:ShowNumbers(period)
     local dayset = {}
     for _, run in ipairs(runs) do
         totalGrouped = totalGrouped + run.groupedSeconds
-        members = members + #run.members
+        -- Group size as recorded (1.2.0 on), else the people with a session.
+        members = members + (run.groupSize or #run.members)
         bossTotal = bossTotal + (run.bosses or 0)
         wipeTotal = wipeTotal + (run.wipes or 0)
         mobTotal = mobTotal + (run.mobs or 0)
@@ -349,7 +350,21 @@ function Diary:ShowNumbers(period)
 
     -- Headline
     Spacer()
-    local headline = string.format("grouped with %s across %s", Plural(#people, "different person", "different people"), Plural(#runs, "run", "runs"))
+    -- Dungeons and the open world are counted apart: a dungeon run is
+    -- entering to leaving, an outing is a stretch of playing together outside.
+    local worldRuns = #runs - dungeonRuns
+    local runsText
+    if dungeonRuns > 0 and worldRuns > 0 then
+        runsText = Plural(dungeonRuns, "dungeon run", "dungeon runs") .. " and "
+            .. Plural(worldRuns, "outing in the world", "outings in the world")
+    elseif dungeonRuns > 0 then
+        runsText = Plural(dungeonRuns, "dungeon run", "dungeon runs")
+    elseif worldRuns > 0 then
+        runsText = Plural(worldRuns, "outing in the world", "outings in the world")
+    else
+        runsText = Plural(0, "run", "runs")
+    end
+    local headline = string.format("grouped with %s across %s", Plural(#people, "different person", "different people"), runsText)
     AddStat(scroll, FormatDuration(totalGrouped), headline)
     table.insert(share, FormatDuration(totalGrouped) .. " " .. headline)
     if length and prevRuns > 0 then
@@ -580,6 +595,16 @@ function Diary:ShowNumbers(period)
         Spacer()
         AddLabel(scroll, GRAY .. string.format("From %s to %s.|r", date("%Y-%m-%d", firstDate), date("%Y-%m-%d", lastDate)))
     end
+
+    -- What isn't counted, so the totals aren't a mystery.
+    local minGrouped, minCombat = addon:GetModule("RosterTracker"):GetSessionGateSeconds()
+    local function Span(seconds)
+        seconds = seconds or 0
+        if seconds < 60 then return Plural(seconds, "second", "seconds") end
+        return Plural(math.floor(seconds / 60 + 0.5), "minute", "minutes")
+    end
+    AddLabel(scroll, GRAY .. string.format("Raids aren't counted, and neither is grouping for less than %s or with less than %s of combat.|r",
+        Span(minGrouped), Span(minCombat)))
 
     shareText = table.concat(share, "\n")
 end

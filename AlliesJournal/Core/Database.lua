@@ -529,11 +529,14 @@ function addon:GetRecentAllyInteractionsInWindow(guid, sinceTime)
     return inWindow
 end
 
--- Your recorded outings, newest first. A "run" is the sessions of everyone
--- you grouped with at the same time in the same place (their dates are the
--- same moment, give or take a few seconds), so the past is covered too
--- without anything new being stored. Notes about a run are kept apart under
--- its id (the time of its first session).
+-- Your recorded outings, newest first. A "run" is one dungeon run, or one
+-- stretch of playing together in the open world. Sessions saved since
+-- 1.2.0 carry which one they belong to (session.run, see RosterTracker:
+-- RunKey), so someone leaving midway stays in the same run. Older sessions
+-- don't: those are put together when they were saved within 2 minutes of
+-- each other in the same place, as before. Notes about a run are kept apart
+-- under its id (the time of its first session). groupSize is the most other
+-- players seen in the group, when the sessions recorded it.
 function addon:GetRuns()
     local g = self.db.global
     local owner = {}
@@ -549,27 +552,43 @@ function addon:GetRuns()
     end
     table.sort(items, function(a, b) return a.session.date < b.session.date end)
 
-    local runs, current = {}, nil
+    local function NewRun(s, zone)
+        return {
+            id = "run" .. s.date, date = s.date, zone = zone, lastDate = s.date,
+            members = {}, sessionIds = {}, groupedSeconds = 0, combatSeconds = 0,
+            bosses = 0, wipes = 0, mobs = 0,
+        }
+    end
+
+    local runs, current, byKey = {}, nil, {}
     for _, item in ipairs(items) do
         local s = item.session
         local zone = s.zone or "Unknown"
-        if not (current and s.date - current.lastDate <= 120 and zone == current.zone) then
-            current = {
-                id = "run" .. s.date, date = s.date, zone = zone, lastDate = s.date,
-                members = {}, sessionIds = {}, groupedSeconds = 0, combatSeconds = 0,
-                bosses = 0, wipes = 0, mobs = 0,
-            }
-            table.insert(runs, current)
+        local run
+        if s.run then
+            run = byKey[s.run]
+            if not run then
+                run = NewRun(s, zone)
+                byKey[s.run] = run
+                table.insert(runs, run)
+            end
+        else
+            if not (current and s.date - current.lastDate <= 120 and zone == current.zone) then
+                current = NewRun(s, zone)
+                table.insert(runs, current)
+            end
+            run = current
         end
-        current.lastDate = s.date
-        table.insert(current.members, item.nameRealm)
-        current.sessionIds[item.id] = true
-        current.groupedSeconds = math.max(current.groupedSeconds, s.groupedSeconds or 0)
-        current.combatSeconds = math.max(current.combatSeconds, s.combatSeconds or 0)
-        current.bosses = math.max(current.bosses, s.bosses or 0)
-        current.wipes = math.max(current.wipes, s.wipes or 0)
-        current.mobs = math.max(current.mobs, s.mobs or 0)
-        current.dungeon = current.dungeon or s.dungeon
+        run.lastDate = s.date
+        if s.groupSize then run.groupSize = math.max(run.groupSize or 0, s.groupSize) end
+        table.insert(run.members, item.nameRealm)
+        run.sessionIds[item.id] = true
+        run.groupedSeconds = math.max(run.groupedSeconds, s.groupedSeconds or 0)
+        run.combatSeconds = math.max(run.combatSeconds, s.combatSeconds or 0)
+        run.bosses = math.max(run.bosses, s.bosses or 0)
+        run.wipes = math.max(run.wipes, s.wipes or 0)
+        run.mobs = math.max(run.mobs, s.mobs or 0)
+        run.dungeon = run.dungeon or s.dungeon
     end
 
     local notes = g.runNotes or {}
@@ -810,6 +829,10 @@ function addon:AddSession(nameRealm, sessionData)
         role = sessionData.role,
         character = sessionData.character,
         dungeon = sessionData.dungeon and true or nil,
+        -- Which run/outing it belongs to and how many others were in the
+        -- group (see RosterTracker:RunKey); missing on older sessions.
+        run = sessionData.run,
+        groupSize = sessionData.groupSize,
         bosses = (sessionData.bosses or 0) > 0 and sessionData.bosses or nil,
         quests = (sessionData.quests or 0) > 0 and sessionData.quests or nil,
         mobs = (sessionData.mobs or 0) > 0 and sessionData.mobs or nil,

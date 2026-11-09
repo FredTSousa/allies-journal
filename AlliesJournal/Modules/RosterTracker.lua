@@ -42,6 +42,11 @@ RosterTracker.runCounter = 0
 RosterTracker.currentRunId = nil
 RosterTracker.lastRunId = nil
 RosterTracker.runStart = {}       -- runId -> time the run started
+-- When the current open-world outing began: the group forming, or leaving a
+-- dungeon (time inside it belongs to that dungeon run). Open-world time and
+-- fights are counted from here, and its sessions share it as their run key,
+-- so one outing is one run however people leave. nil while not grouped.
+RosterTracker.outingStart = nil
 -- guid -> { [runId] = true } once a prompt / session has been handled for
 -- that player in that run, so the several completion triggers of one
 -- dungeon don't produce duplicates. Cleared when the player leaves.
@@ -236,7 +241,21 @@ function RosterTracker:RunSince(since, runId)
     if runId and self.runStart[runId] then
         return math.max(since, self.runStart[runId])
     end
+    -- Open world: not before the outing began, so time in a dungeon you did
+    -- together earlier (already counted for that run) isn't counted again.
+    if not runId and self.outingStart then
+        return math.max(since, self.outingStart)
+    end
     return since
+end
+
+-- What a session belongs to, saved on it so "In numbers" and the runs list
+-- can put one outing's sessions together however far apart they were saved
+-- (someone leaving midway used to split a run in two): "d<time entered>" for
+-- a dungeon run, "w<time it began>" for an open-world outing.
+function RosterTracker:RunKey(runId, since)
+    if runId then return "d" .. (self.runStart[runId] or runId) end
+    return "w" .. (self.outingStart or since or time())
 end
 
 -- The handled guards only last for one dungeon run or one stretch of grouping,
@@ -634,6 +653,14 @@ function RosterTracker:OnRosterUpdate()
         -- so clearing the live state here doesn't affect it.
         capture:ClearFights(d.guid)
     end
+
+    -- The open-world outing lasts while there's a group; the next group
+    -- starts a new one. (Cleared only now: the departures above used it.)
+    if next(self.roster) then
+        self.outingStart = self.outingStart or time()
+    else
+        self.outingStart = nil
+    end
 end
 
 -- Called from the chat-name right-click menu (Tooltip.lua) when clicking
@@ -704,6 +731,15 @@ end
 function RosterTracker:CheckSessionEligibility(candidates, runId)
     local capture = addon:GetModule("ReviewCapture")
     local minGrouped, minCombat = self:GetSessionGateSeconds()
+    -- Open world: only fights since the outing began (see RunSince).
+    local fightsSince = not runId and self.outingStart or nil
+
+    -- Everyone else in the group at this moment: who's still here plus
+    -- whoever is being recorded as leaving (already out of self.roster).
+    local inGroup, groupSize = {}, 0
+    for guid in pairs(self.roster) do inGroup[guid] = true end
+    for _, c in ipairs(candidates) do inGroup[c.guid] = true end
+    for _ in pairs(inGroup) do groupSize = groupSize + 1 end
 
     for _, c in ipairs(candidates) do
         local alreadyRecorded
@@ -715,16 +751,18 @@ function RosterTracker:CheckSessionEligibility(candidates, runId)
 
         if c.since and not alreadyRecorded then
             local groupedSeconds = time() - self:RunSince(c.since, runId)
-            local combatSeconds = capture:GetCombatSeconds(c.guid, runId)
+            local combatSeconds = capture:GetCombatSeconds(c.guid, runId, fightsSince)
 
             if groupedSeconds >= minGrouped and combatSeconds >= minCombat then
-                local aggregate = capture:AggregateFights(capture:GetRunFights(c.guid, runId))
+                local aggregate = capture:AggregateFights(capture:GetRunFights(c.guid, runId, fightsSince))
                 local tally = self:GetTally(c.guid, runId)
                 addon:AddSession(c.data.nameRealm, {
                     zone = self:PlaceName(),
                     role = c.data.role,
                     character = addon:GetShortName(addon:GetPlayerName()),
                     dungeon = runId ~= nil,
+                    run = self:RunKey(runId, c.since),
+                    groupSize = groupSize,
                     since = c.since,
                     bosses = tally.bosses, quests = tally.quests, wipes = tally.wipes, mobs = tally.mobs,
                     info = c.data,
@@ -927,6 +965,13 @@ function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
     if self.wasInDungeon and not isDungeonNow then
         self.instanceExitedAt = time()
         self.currentRunId = nil  -- back in the open world (lastRunId stays)
+        -- Playing on together out here is a new outing: the dungeon's time
+        -- and fights stay with the dungeon run, and open-world counts from
+        -- before it (mobs, quests) don't carry into the new outing.
+        if next(self.roster) then
+            self.outingStart = time()
+            for _, byRun in pairs(self.tally) do byRun[0] = nil end
+        end
         -- A picked-up run can carry grouped-since times for people who left
         -- while you were disconnected; they never "leave" again to clear them.
         for guid in pairs(self.groupedSince) do

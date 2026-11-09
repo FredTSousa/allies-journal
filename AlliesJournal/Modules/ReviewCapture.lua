@@ -169,6 +169,7 @@ function ReviewCapture:OnCombatEnd()
         -- Which dungeon run this belongs to (nil outside any dungeon), so
         -- a review or session only ever counts its own run's fights.
         fight.run = addon:GetModule("RosterTracker").currentRunId
+        fight.at = time()  -- when it ended, so open-world fights can be limited to one outing
         fight.cycle = self.cycleCounter
         fight.groupBreakdown = groupBreakdown  -- shared reference across every guid's fight entry this cycle - read-only after creation, so safe
         fight.name = fightName
@@ -341,9 +342,9 @@ end
 -- RosterTracker's run ids): a dungeon run's own fights, or - with a nil
 -- runId - the fights outside any dungeon. Summed from the recorded fights
 -- so each run is measured on its own.
-function ReviewCapture:GetCombatSeconds(guid, runId)
+function ReviewCapture:GetCombatSeconds(guid, runId, sinceTime)
     local total = 0
-    for _, fight in ipairs(self:GetRunFights(guid, runId)) do
+    for _, fight in ipairs(self:GetRunFights(guid, runId, sinceTime)) do
         total = total + (fight.duration or 0)
     end
     return total
@@ -398,10 +399,15 @@ end
 -- The fights recorded for this guid during one run: fights tagged with
 -- that run id, or with a nil runId the ones recorded outside any dungeon.
 -- (GetFights below returns everything, for the manual /pr queue.)
-function ReviewCapture:GetRunFights(guid, runId)
+-- sinceTime (optional): only fights that ended at or after it - used for an
+-- open-world outing after a dungeon, so fights from before it don't count.
+-- Fights saved before they carried a time are always kept.
+function ReviewCapture:GetRunFights(guid, runId, sinceTime)
     local result = {}
     for _, fight in ipairs(self.fights[guid] or {}) do
-        if fight.run == runId then table.insert(result, fight) end
+        if fight.run == runId and not (sinceTime and fight.at and fight.at < sinceTime) then
+            table.insert(result, fight)
+        end
     end
     return result
 end

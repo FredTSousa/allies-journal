@@ -7,6 +7,9 @@
 - The journal list puts people who are online first, ordered by the color of their star (green, then yellow, then no note, then red) and then by highest level.
 - **Check Status** only looks up people you have a note on.
 - In the LFG Forever addon's window, group listings now show where their leader is too.
+- **In numbers** counts dungeon runs and outings in the open world separately, the average group now counts everyone who was in it, and a line at the bottom says what isn't counted (raids, short groupings).
+- A dungeon run stays one run when someone leaves partway, and playing on together in the open world is one outing however people leave. This applies to runs from now on; older ones are grouped as before.
+- Fixed time in a dungeon being counted a second time when you kept playing together in the open world afterwards, which inflated time together and made that outing look far longer than it was.
 - Fixed a disconnect in a dungeon starting the run over when you got back in, which lost its fights and restarted the 10-minute wait, so the note window often never opened at the end. The run is now saved as you go and is picked up again if you're back in the same dungeon within 45 minutes. `/aj why` says whether your run carried on or started over.
 - Fixed an empty box in front of chat lines with people from your journal, such as whispers you send them. The star icon shows there now, like everywhere else in chat.
 - Fixed Lua errors when right-clicking an NPC or pet, or opening a menu or Group Finder listing while the game was hiding a name.
