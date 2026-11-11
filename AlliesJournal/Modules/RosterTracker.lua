@@ -136,6 +136,9 @@ function RosterTracker:SaveRun()
     if not db then return end
     local runId = self.currentRunId
     if not runId or not next(self.roster) or self:InRaidContext() then return end
+    -- On a corpse run the map is the open world's, which would stop the run
+    -- being picked up again in the dungeon; the last save from inside stands.
+    if self.corpseRun then return end
 
     local ok, cache = pcall(function()
         local grouped, handledReview, handledSession = {}, {}, {}
@@ -934,9 +937,20 @@ function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
     local inInstance, instanceType = IsInInstance()
     local isDungeonNow = inInstance and instanceType == "party"
     self.inRaidInstance = inInstance and instanceType == "raid"
+    local deadOrGhost = UnitIsDeadOrGhost("player") and true or false
     -- After a load screen or /reload everyone in the group looks new; stay
     -- quiet for a few seconds so that isn't announced.
     addon:GetModule("Notices").quietUntil = GetTime() + 8
+
+    -- Releasing after a wipe puts you at a graveyard outside the dungeon.
+    -- That's a corpse run, not leaving: the run stays open (no notes asked
+    -- for, same run id) and carries on when you walk back in. Only once
+    -- you're outside and alive does it count as having left.
+    if self.wasInDungeon and not isDungeonNow and deadOrGhost then
+        self.corpseRun = true
+        return
+    end
+    self.corpseRun = nil
 
     if isDungeonNow then
         self.currentEncounterName = GetInstanceInfo()
@@ -981,7 +995,9 @@ function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
 
     -- Outside a dungeon there's no run to pick up again, so a saved one
     -- can't be carried into a later visit to the same dungeon by mistake.
-    if not isDungeonNow and AlliesJournalDB then
+    -- Kept while you're a ghost: a /reload on a corpse run loses the
+    -- in-memory run, and this is what picks it up again when you get back.
+    if not isDungeonNow and not deadOrGhost and AlliesJournalDB then
         AlliesJournalDB.runCache = nil
     end
 

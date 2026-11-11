@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Releasing after a wipe no longer counts as leaving the dungeon. Before, the graveyard outside asked you for notes on the whole group mid-run and split the run in two. Now the run carries on when you get back in, and only ends once you're outside alive.
+
 ## 1.2.0
 
 - Players from your journal get a badge right after their name on their nameplate, the name floating over them in the world. It needs nameplates turned on for those players in the game options, and doesn't show on friendly players inside dungeons and raids, where the game hides their nameplates from addons. Turn it off or move it in `/aj options`, Badges tab. `/aj badgetest` now puts a test badge on every nameplate too.
