@@ -201,6 +201,8 @@ function addon:AddReview(nameRealm, reviewData)
         fightsIncluded = reviewData.fightsIncluded or 0,  -- how many fights the user kept checked in the selection UI
         chat = reviewData.chat or {},
         sessionIds = reviewData.sessionIds or {},  -- sessions recorded with this player since their last review
+        -- Written afterwards from the Runs window about one saved run.
+        forRun = reviewData.forRun and true or nil,
         -- C_RecentAllies interactions (dungeon/raid/duel/etc. completions
         -- Blizzard already tracked) that fell inside this grouped session's
         -- window - see GetRecentAllyInteractionsInWindow.
@@ -557,6 +559,9 @@ function addon:GetRuns()
             id = "run" .. s.date, date = s.date, zone = zone, lastDate = s.date,
             members = {}, sessionIds = {}, groupedSeconds = 0, combatSeconds = 0,
             bosses = 0, wipes = 0, mobs = 0,
+            -- [nameRealm] = { sessionId, ... }: that person's sessions in
+            -- this run, so a note written from the Runs window links them.
+            sessionsByMember = {},
         }
     end
 
@@ -583,6 +588,12 @@ function addon:GetRuns()
         if s.groupSize then run.groupSize = math.max(run.groupSize or 0, s.groupSize) end
         table.insert(run.members, item.nameRealm)
         run.sessionIds[item.id] = true
+        local own = run.sessionsByMember[item.nameRealm]
+        if not own then
+            own = {}
+            run.sessionsByMember[item.nameRealm] = own
+        end
+        table.insert(own, item.id)
         run.groupedSeconds = math.max(run.groupedSeconds, s.groupedSeconds or 0)
         run.combatSeconds = math.max(run.combatSeconds, s.combatSeconds or 0)
         run.bosses = math.max(run.bosses, s.bosses or 0)
@@ -1145,16 +1156,35 @@ end
 -- IDs onto a review when it's saved, and to show "N sessions since last
 -- review" in the review prompt before writing one.
 function addon:GetUnlinkedSessionsForPlayer(nameRealm)
-    local latestReview = self:GetLatestReview(nameRealm)
-    local cutoff = latestReview and latestReview.date or 0
+    -- A note written later about a saved run (forRun) covers only that run,
+    -- so it doesn't move the "since the last note" cutoff, and whatever any
+    -- note already links is never linked a second time.
+    local cutoff, linked = 0, {}
+    for _, review in ipairs(self:GetReviewsForPlayer(nameRealm)) do
+        if not review.forRun and (review.date or 0) > cutoff then cutoff = review.date end
+        for _, id in ipairs(review.sessionIds or {}) do linked[id] = true end
+    end
 
     local unlinked = {}
     for _, session in ipairs(self:GetSessionsForPlayer(nameRealm)) do
-        if session.date > cutoff then
+        if session.date > cutoff and not linked[session.id] then
             table.insert(unlinked, session.id)
         end
     end
     return unlinked
+end
+
+-- The note on this player that links any of these sessions, or nil - how
+-- the Runs window knows someone already has a note for that run.
+function addon:GetReviewForSessions(nameRealm, sessionIds)
+    local wanted = {}
+    for _, id in ipairs(sessionIds or {}) do wanted[id] = true end
+    for _, review in ipairs(self:GetReviewsForPlayer(nameRealm)) do
+        for _, id in ipairs(review.sessionIds or {}) do
+            if wanted[id] then return review end
+        end
+    end
+    return nil
 end
 
 -- Shared rating-color logic, used anywhere a review needs to become a single

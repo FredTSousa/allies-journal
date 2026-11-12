@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- In the **Runs** window, everyone in a run now has a button with their name. Click it to write a note on that person for that run: the note gets the run's place instead of "Manual", is linked to just that run, and says which run it's about at the top. A check on the button means you already have a note for that run, and clicking it opens that note to edit. Writing a note about an older run doesn't change when you last saw them.
 - Releasing after a wipe no longer counts as leaving the dungeon. Before, the graveyard outside asked you for notes on the whole group mid-run and split the run in two. Now the run carries on when you get back in, and only ends once you're outside alive.
 
 ## 1.2.0

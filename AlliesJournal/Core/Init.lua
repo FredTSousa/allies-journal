@@ -1032,6 +1032,21 @@ function AlliesJournal:DoQueueNameForReview(nameRealm)
     }, true)
 end
 
+-- A note about someone from a saved run (a run from GetRuns, picked in the
+-- Runs window): the place is the run's, and only their sessions in that run
+-- get linked, instead of "Manual" and everything since their last note.
+function AlliesJournal:QueueRunMemberForReview(run, nameRealm)
+    self:GetModule("ReviewPrompt"):QueueBatch({
+        {
+            nameRealm = nameRealm,
+            encounter = run.zone,
+            role = nil,
+            sessionIds = run.sessionsByMember[nameRealm] or {},
+            runDate = run.date,
+        },
+    }, true)
+end
+
 -- The real gate defaults to 10 minutes grouped-together before a leave/kick
 -- or instance-complete trigger will queue a prompt. Set it to 0 (or a small
 -- decimal, e.g. 0.1 for ~6 seconds) to test the actual GROUP_ROSTER_UPDATE /

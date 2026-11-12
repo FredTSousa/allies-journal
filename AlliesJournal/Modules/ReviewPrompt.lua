@@ -43,7 +43,8 @@ ReviewPrompt.active = false
 ReviewPrompt.batchTotal = 0
 ReviewPrompt.shownCount = 0
 
--- data: { nameRealm, encounter, role, guid, fights }
+-- data: { nameRealm, encounter, role, guid, fights }, plus sessionIds and
+-- runDate when the note is about a saved run (see QueueRunMemberForReview)
 -- asked: the person chose to write this note (right-click menu, /aj), as
 -- opposed to the end-of-run prompt, so it is shown right away.
 function ReviewPrompt:QueueBatch(list, asked)
@@ -217,15 +218,20 @@ function ReviewPrompt:Save()
         -- session - read right before Clear() below wipes the live
         -- buffer, so this is everything captured up to this exact save.
         chat = addon:GetModule("ChatLog"):GetMessages(data.guid),
-        -- Every session recorded for this player since their last review
-        -- (or ever, if this is their first) gets linked onto this one.
-        sessionIds = addon:GetUnlinkedSessionsForPlayer(data.nameRealm),
+        -- A note written from a saved run (Runs window) links that run's
+        -- sessions only. Otherwise every session recorded for this player
+        -- since their last review (or ever, if this is their first) gets
+        -- linked onto this one.
+        sessionIds = data.sessionIds or addon:GetUnlinkedSessionsForPlayer(data.nameRealm),
+        forRun = data.runDate and true or nil,
         -- Whatever C_RecentAllies logged for this guid during the actual
         -- grouped window (data.since -> now) - nil-safe, since data.since
         -- is only set when this came through RosterTracker (not /pr
         -- test/testgroup or an edit).
         interactions = data.since and addon:GetRecentAllyInteractionsInWindow(data.guid, data.since) or {},
-        zone = data.encounter,
+        -- zone moves the player's "last seen" to now; a note about an
+        -- older run must not claim you just saw them there.
+        zone = not data.runDate and data.encounter or nil,
     })
 
     -- Falls back to a name-based GUID lookup when there's no live unit
@@ -238,6 +244,7 @@ function ReviewPrompt:Save()
     addon:GetModule("ChatLog"):Clear(data.guid)
     addon:GetModule("Tooltip"):RefreshFramesSoon()
     addon:GetModule("Browser"):RefreshIfShown()
+    addon:GetModule("Diary"):RefreshRunsIfShown()
     -- Otherwise the new badge/tooltip only appears after LFGAnnotate's own
     -- 1s ticker happens to fire next, or a full /reload - force an
     -- immediate rescan the same way the other two modules refresh here.
@@ -452,6 +459,9 @@ function ReviewPrompt:BuildFrameInner()
     local header = AceGUI:Create("Label")
     header:SetFullWidth(true)
     local headerText = data.encounter or "Unknown"
+    if data.runDate then
+        headerText = headerText .. "   |cff999999run of " .. date("%Y-%m-%d %H:%M", data.runDate) .. "|r"
+    end
     local remaining = (self.batchTotal or 0) - (self.shownCount or 0)
     if not self.editingReviewID and not inGroup and remaining > 0 then
         headerText = headerText .. "   |cff999999- " .. remaining .. " more after this one|r"

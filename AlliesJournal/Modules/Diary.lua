@@ -18,7 +18,9 @@ local function FormatDuration(seconds)
 end
 
 -- One reusable window per kind, dressed like the /aj window.
-local function OpenWindow(self, key, title, width, height)
+-- keepPlace: a refresh of a window already open, so it isn't raised over
+-- whatever is in front of it (the note window that just saved).
+local function OpenWindow(self, key, title, width, height, keepPlace)
     local frame = self[key]
     if not frame then
         frame = addon:CreateWindow()
@@ -38,7 +40,7 @@ local function OpenWindow(self, key, title, width, height)
     frame.fill:SetColorTexture(c[1], c[2], c[3], c[4])
     frame:ReleaseChildren()
     frame:Show()
-    frame.frame:Raise()
+    if not keepPlace then frame.frame:Raise() end
     return frame
 end
 
@@ -61,11 +63,61 @@ end
 -- Runs
 ----------------------------------------------------------------------
 
-function Diary:ShowRuns()
-    local frame = OpenWindow(self, "runsFrame", "Allies Journal - Runs", 540, 620)
+-- One button per person in a run: writes a note about them for that run, or
+-- opens the note already written for it (marked with a check).
+local CHECK = "|TInterface\\RaidFrame\\ReadyCheck-Ready:0|t "
+
+local function AddMemberButtons(container, run)
+    local people = {}
+    for nameRealm in pairs(run.sessionsByMember) do table.insert(people, nameRealm) end
+    table.sort(people)
+    if #people == 0 then return end
+
+    local row = AceGUI:Create("SimpleGroup")
+    row:SetFullWidth(true)
+    row:SetLayout("Flow")
+    for _, nameRealm in ipairs(people) do
+        local record = addon.db.global.players[nameRealm]
+        local color = record and record.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[record.class]
+        local short = addon:GetShortName(nameRealm)
+        local text = (color and color.colorStr) and ("|c" .. color.colorStr .. short .. "|r") or short
+        local existing = addon:GetReviewForSessions(nameRealm, run.sessionsByMember[nameRealm])
+
+        local button = AceGUI:Create("Button")
+        button:SetText(existing and (CHECK .. text) or text)
+        button:SetAutoWidth(true)
+        button:SetCallback("OnClick", function()
+            if existing then
+                addon:GetModule("ReviewPrompt"):EditReview(nameRealm, existing.id)
+            else
+                addon:QueueRunMemberForReview(run, nameRealm)
+            end
+        end)
+        button:SetCallback("OnEnter", function(widget)
+            GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
+            GameTooltip:AddLine(existing and ("Edit your note on " .. short .. " for this run")
+                or ("Write a note on " .. short .. " for this run"), 1, 1, 1)
+            GameTooltip:Show()
+        end)
+        button:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+        row:AddChild(button)
+    end
+    container:AddChild(row)
+end
+
+-- After a note is saved, so a run's button gets its check straight away.
+function Diary:RefreshRunsIfShown()
+    if self.runsFrame and self.runsFrame.frame:IsShown() then self:ShowRuns(true) end
+end
+
+function Diary:ShowRuns(keepPlace)
+    local frame = OpenWindow(self, "runsFrame", "Allies Journal - Runs", 540, 620, keepPlace)
 
     local scroll = AceGUI:Create("ScrollFrame")
     scroll:SetLayout("List")
+    -- Kept between rebuilds so a refresh doesn't jump back to the top.
+    self.runsScrollStatus = self.runsScrollStatus or {}
+    scroll:SetStatusTable(self.runsScrollStatus)
     frame:AddChild(scroll)
 
     local runs = addon:GetRuns()
@@ -74,19 +126,15 @@ function Diary:ShowRuns()
         return
     end
 
-    AddLabel(scroll, GRAY .. #runs .. " run(s), newest first. Write a note on any of them - it's saved as you type.|r")
+    AddLabel(scroll, GRAY .. #runs .. " run(s), newest first. Click a name to write a note on that person "
+        .. "for the run (a check means you already have). The note on the run itself is saved as you type.|r")
     AddHeading(scroll)
 
     for _, run in ipairs(runs) do
-        local names = {}
-        for _, nameRealm in ipairs(run.members) do
-            table.insert(names, addon:GetShortName(nameRealm))
-        end
-        table.sort(names)
-
-        AddLabel(scroll, string.format("|cffffd100%s|r  %s%s  -  %s grouped|r\nWith: %s",
+        AddLabel(scroll, string.format("|cffffd100%s|r  %s%s  -  %s grouped|r%s",
             run.zone, GRAY, date("%Y-%m-%d %H:%M", run.date), FormatDuration(run.groupedSeconds),
-            #names > 0 and table.concat(names, ", ") or "nobody recorded"))
+            next(run.sessionsByMember) and "" or "\nWith: nobody recorded"))
+        AddMemberButtons(scroll, run)
 
         local note = AceGUI:Create("EditBox")
         note:SetFullWidth(true)
