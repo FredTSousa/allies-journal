@@ -1165,17 +1165,20 @@ function Browser:RefreshList()
             if tagText ~= '' then summary = summary .. '  |cff909090' .. tagText .. '|r' end
 
             local infoText = allyData and InfoTextFor(allyData) or ''
+            -- A friend with nothing known is just offline (Battle.net can't
+            -- name an offline friend's character), not "not recent".
             if not allyData then
-                infoText = 'not recent'
+                infoText = record.friend and 'not online' or 'not recent'
             elseif (allyData.fromWho or allyData.fromFriend) and infoText == '' then
                 infoText = 'not online'
             end
 
             -- Online status is the card's left bar now, so no status icon here.
             -- [NR] = Not in Recent Allies (whether or not a /who check has
-            -- filled in their info since).
+            -- filled in their info since). Not for friends: their status
+            -- comes from the friends list, so Recent Allies doesn't matter.
             local nameLine = (record.favorite and FAVORITE_MARK or '') .. RoleIconFor(latest and latest.role) .. ColoredShortName(record.nameRealm, allyData) .. (record.friend and FRIEND_MARK or '')
-            if not allyData or allyData.fromWho then
+            if (not allyData or allyData.fromWho) and not record.friend then
                 nameLine = nameLine .. ' |cff909090[NR]|r'
             end
             if record.nickname and record.nickname ~= '' and not addon:IsStreamerMode() then
