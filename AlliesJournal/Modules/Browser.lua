@@ -1,5 +1,5 @@
 local addon = AlliesJournal
-local Browser = addon:NewModule("Browser")
+local Browser = addon:NewModule("Browser", "AceEvent-3.0")
 local AceGUI = LibStub("AceGUI-3.0")
 local L = LibStub("AceLocale-3.0"):GetLocale("AlliesJournal")
 
@@ -627,17 +627,29 @@ function Browser:OnEnable()
     self.ratingFilter = "All"
     self.sourceFilter = "All"
 
-    -- Friends' status comes from the friends list, not Recent Allies.
-    -- BN_FRIEND_INFO_CHANGED is the only event for a Battle.net friend who is
-    -- already online entering the game, but it fires constantly, so the list
-    -- is batched and only redrawn when someone's status really changed.
-    local lastFriends
-    local function FriendSignature()
+    -- Status on the cards comes from the friends list for friends and from
+    -- Recent Allies for everyone else, so an open list is redrawn when
+    -- either changes. Without the Recent Allies part, an open journal kept
+    -- showing someone online after they logged off. BN_FRIEND_INFO_CHANGED
+    -- (the only event for a Battle.net friend who is already online entering
+    -- the game) and RECENT_ALLY_DATA_UPDATED both fire constantly, so the
+    -- list is batched and only redrawn when someone's status really changed.
+    -- For Recent Allies that's online, AFK and DND: changing zone alone
+    -- doesn't redraw.
+    local lastStatuses
+    local function StatusSignature()
         local parts = {}
         for name, entry in pairs(addon:GetFriendStatuses()) do
             local state = entry.stateData
-            table.insert(parts, name .. tostring(state.isOnline) .. tostring(state.isAFK)
+            table.insert(parts, "f:" .. name .. tostring(state.isOnline) .. tostring(state.isAFK)
                 .. tostring(state.isDND) .. tostring(state.currentLocation))
+        end
+        for _, ally in ipairs(GetRecentAlliesList() or {}) do
+            local char, state = ally.characterData, ally.stateData
+            if char and state then
+                table.insert(parts, "r:" .. tostring(char.guid) .. tostring(state.isOnline)
+                    .. tostring(state.isAFK) .. tostring(state.isDND))
+            end
         end
         table.sort(parts)
         return table.concat(parts, "|")
@@ -648,15 +660,21 @@ function Browser:OnEnable()
         C_Timer.After(2, function()
             self.friendRefreshPending = false
             if not (self.frame and self.frame:IsShown()) then return end
-            local ok, signature = pcall(FriendSignature)
-            if not ok or signature ~= lastFriends then
-                lastFriends = ok and signature or nil
+            local ok, signature = pcall(StatusSignature)
+            if not ok or signature ~= lastStatuses then
+                lastStatuses = ok and signature or nil
                 self:RefreshIfShown()
             end
         end)
     end
     for _, event in ipairs({ "FRIENDLIST_UPDATE", "BN_FRIEND_ACCOUNT_ONLINE", "BN_FRIEND_ACCOUNT_OFFLINE", "BN_FRIEND_INFO_CHANGED" }) do
         pcall(addon.RegisterEvent, addon, event, RefreshSoon)
+    end
+    -- On this module, not the addon: the addon already handles
+    -- RECENT_ALLY_DATA_UPDATED (pin retries), and AceEvent keeps one handler
+    -- per event per object, so registering it there would replace that one.
+    for _, event in ipairs({ "RECENT_ALLY_DATA_UPDATED", "RECENT_ALLIES_DATA_READY" }) do
+        pcall(self.RegisterEvent, self, event, RefreshSoon)
     end
 end
 
