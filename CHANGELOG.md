@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.4.0
 
 - `/aj options` is reorganized into six tabs by what you're doing: **Notes** (writing a note and when the window opens), **Alerts** (what the addon tells you, by when it happens), **Display** (chat, Group Finder, Recent Allies, the journal window, the minimap button), **Badges**, **Tooltips**, and **Data & privacy** (what is recorded, backups, deleting and resetting). Your settings are unchanged, they have only moved.
 - Each option now has a short name with its explanation underneath. Nameplate badge settings grey out while the nameplate badge is off.
