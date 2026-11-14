@@ -32,7 +32,7 @@ I used to add players I liked as friends, and ended up with a huge list of names
 
 ## Your data
 
-Everything is stored locally in your own SavedVariables file: your notes, the sessions, and the chat lines captured while grouped with someone you write about. Nothing is uploaded or shared, and nobody else can see it.
+Everything is stored locally in your own SavedVariables file: your notes, the sessions, and the chat lines captured while grouped with someone you write about. Nothing is uploaded or shared, and nobody else can see it. If you'd rather not keep damage and healing numbers, or chat, each has its own switch in `/aj options` under Recording, with a button to delete what is already saved.
 
 ## Installing
 

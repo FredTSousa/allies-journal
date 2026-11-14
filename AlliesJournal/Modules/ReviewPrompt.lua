@@ -217,7 +217,8 @@ function ReviewPrompt:Save()
         -- Chat only ever persists long-term via a review, never a plain
         -- session - read right before Clear() below wipes the live
         -- buffer, so this is everything captured up to this exact save.
-        chat = addon:GetModule("ChatLog"):GetMessages(data.guid),
+        -- Nothing is saved with "Keep chat with my notes" off.
+        chat = addon:TracksChat() and addon:GetModule("ChatLog"):GetMessages(data.guid) or {},
         -- A note written from a saved run (Runs window) links that run's
         -- sessions only. Otherwise every session recorded for this player
         -- since their last review (or ever, if this is their first) gets
@@ -342,6 +343,49 @@ function ReviewPrompt:ApplyWindowSize()
     end
     outer:DoLayout()
     if self.formScroll then self.formScroll:DoLayout() end
+    self:FitWindowHeight()
+end
+
+-- The height from /aj options is the most the window takes. When the form
+-- is shorter than that (no fight details or chat to show, a note started by
+-- name), the window shrinks to fit it instead of leaving an empty area
+-- above the buttons; when the form grows again (more quick tags, the fight
+-- list opened) it grows back, up to that height. The top edge stays where
+-- it is, so the tabs and the form don't move under the mouse.
+local MIN_WINDOW_HEIGHT = 260
+local FORM_BOTTOM_PADDING = 8
+
+function ReviewPrompt:FitWindowHeight()
+    local outer, scroll = self.frame, self.formScroll
+    if not outer or not scroll or not outer.frame:IsShown() then return end
+
+    local visible = scroll.frame:GetHeight()
+    local needed = scroll.content:GetHeight()
+    local current = outer.frame:GetHeight()
+    if not visible or not needed or not current or visible <= 0 or needed <= 0 then return end
+
+    local maxHeight = addon.db.global.settings.reviewWindow.height
+    local target = current - (visible - (needed + FORM_BOTTOM_PADDING))
+    target = math.floor(math.min(maxHeight, math.max(MIN_WINDOW_HEIGHT, target)) + 0.5)
+    local delta = target - current
+    if math.abs(delta) < 1 then return end
+
+    local top, left = outer.frame:GetTop(), outer.frame:GetLeft()
+    outer:SetHeight(target)
+    -- In a group window the form fills the tab group, which has the fixed
+    -- height; otherwise the form itself has it.
+    local sized = self.formTabs or scroll
+    sized:SetHeight(sized.frame:GetHeight() + delta)
+    if top and left then
+        outer.frame:ClearAllPoints()
+        outer.frame:SetPoint("TOP", UIParent, "BOTTOM", 0, top)
+        outer.frame:SetPoint("LEFT", UIParent, "LEFT", left, 0)
+    end
+    outer:DoLayout()
+    -- The tab group hands its new height on to the form right away, so a
+    -- second call measures the form at its real size.
+    if self.formTabs then self.formTabs:DoLayout() end
+    scroll:DoLayout()
 end
 
 -- Green text for the Save button so it reads as the main action.
@@ -443,8 +487,10 @@ function ReviewPrompt:BuildFrameInner()
         local tabs = self:CreateGroupTabs(windowSettings.height - 114 - addon.windowExtra)
         tabs:AddChild(frame)
         outer:AddChild(tabs)
+        self.formTabs = tabs
     else
         outer:AddChild(frame)
+        self.formTabs = nil
     end
 
     -- Everything below belongs to this build only - rating clicks update
@@ -498,14 +544,9 @@ function ReviewPrompt:BuildFrameInner()
         self:AddRatingSection(frame, "performance", L["Performance"])
     end
 
-    -- Plain divider line between the rating form above and the fight
-    -- data/chat below - AceGUI's own "Heading" widget draws a full-width
-    -- horizontal line, an empty label is enough to get just the line.
-    local divider = AceGUI:Create("Heading")
-    divider:SetText("Fight details")
-    divider:SetFullWidth(true)
-    frame:AddChild(divider)
-
+    -- The fight data/chat below the rating form, under its own divider
+    -- line (AddDetails draws both, or nothing at all when neither kind of
+    -- data is being recorded).
     self:AddDetails(frame, data)
 
     -- Fixed footer, outside the scrolling form: a one-line status that
@@ -569,6 +610,13 @@ function ReviewPrompt:BuildFrameInner()
     outer:AddChild(buttonRow)
 
     self:RefreshRequirements()
+
+    -- Now, and once more after this frame's layout has settled (some
+    -- heights are only final once widths have been applied).
+    self:FitWindowHeight()
+    C_Timer.After(0, function()
+        if self.formScroll == frame then self:FitWindowHeight() end
+    end)
 end
 
 -- Tints the EditBox's own border art (the Left/Middle/Right textures of
@@ -674,6 +722,7 @@ function ReviewPrompt:SelectRating(key, value)
     self:RefreshRequirements()
     -- The chip row's height changed after the form was laid out.
     if self.formScroll then self.formScroll:DoLayout() end
+    self:FitWindowHeight()
     if value ~= "average" and self.noteBoxes[key] then
         self.noteBoxes[key]:SetFocus()
     end
@@ -786,23 +835,46 @@ end
 -- Fight stats, the DPS chart and the chat log, shown inline under the
 -- "Fight details" heading. When there's nothing to show, an empty state
 -- says why (instead of the section just silently being absent).
+--
+-- Follows the two recording switches (addon:TracksDamage / TracksChat):
+-- with one off its part is left out and the wording only names the other,
+-- and with both off there is no section at all - no heading, no "nothing
+-- recorded" line - so the window simply ends at the ratings.
 function ReviewPrompt:AddDetails(frame, data)
-    local hasFights = data.fights and #data.fights > 0
-    local hasChat = data.guid and #addon:GetModule("ChatLog"):GetMessages(data.guid) > 0
+    local showDamage, showChat = addon:TracksDamage(), addon:TracksChat()
+    if not showDamage and not showChat then return end
+
+    -- AceGUI's "Heading" widget draws a full-width horizontal line with
+    -- the text in the middle.
+    local divider = AceGUI:Create("Heading")
+    divider:SetText(showDamage and "Fight details" or "Chat while grouped")
+    divider:SetFullWidth(true)
+    frame:AddChild(divider)
+
+    local hasFights = showDamage and data.fights and #data.fights > 0
+    local hasChat = showChat and data.guid and #addon:GetModule("ChatLog"):GetMessages(data.guid) > 0
 
     if hasFights or hasChat then
-        self:AddFightSelectionSection(frame, data)
-        self:AddChatLogSection(frame, data)
+        if showDamage then self:AddFightSelectionSection(frame, data) end
+        -- The divider already says "Chat while grouped" when chat is the
+        -- only thing here, so the chat box gets a shorter label.
+        if showChat then self:AddChatLogSection(frame, data, not showDamage) end
         return
     end
 
     local reason
     if self.editingReviewID then
-        reason = "Fight stats and chat aren't available when editing a saved note."
+        reason = (showDamage and showChat and "Fight stats and chat aren't")
+            or (showDamage and "Fight stats aren't") or "Chat isn't"
+        reason = reason .. " available when editing a saved note."
     elseif not data.guid then
-        reason = "This note was started by name, so no fight stats or chat were captured. They're only recorded while you're grouped with someone."
+        local what = (showDamage and showChat and "no fight stats or chat were")
+            or (showDamage and "no fight stats were") or "no chat was"
+        reason = "This note was started by name, so " .. what .. " captured. That only happens while you're grouped with someone."
     else
-        reason = "No fights or chat were recorded while you were grouped with this player."
+        local what = (showDamage and showChat and "No fights or chat were")
+            or (showDamage and "No fights were") or "No chat was"
+        reason = what .. " recorded while you were grouped with this player."
     end
 
     local empty = AceGUI:Create("Label")
@@ -1210,6 +1282,7 @@ function ReviewPrompt:AddFightSelectionSection(frame, data)
         self.fightListExpanded = not self.fightListExpanded
         toggleBtn:SetText(self.fightListExpanded and "Hide fight list" or "Choose fights...")
         FillFightList()
+        self:FitWindowHeight()
     end)
 
     FillFightList()
@@ -1223,7 +1296,8 @@ end
 -- Saving this review is what actually persists this chat long-term - see
 -- Save(). Nothing shown for the synthetic /pr test prompt (no guid), when
 -- editing an old review (also no guid), or once nobody said anything.
-function ReviewPrompt:AddChatLogSection(frame, data)
+-- shortLabel: the section's divider already reads "Chat while grouped".
+function ReviewPrompt:AddChatLogSection(frame, data, shortLabel)
     if not data.guid then return end
 
     local messages = addon:GetModule("ChatLog"):GetMessages(data.guid)
@@ -1231,7 +1305,7 @@ function ReviewPrompt:AddChatLogSection(frame, data)
 
     local heading = AceGUI:Create("Label")
     heading:SetFullWidth(true)
-    heading:SetText("Chat while grouped (saved with this note):")
+    heading:SetText(shortLabel and "Saved with this note:" or "Chat while grouped (saved with this note):")
     frame:AddChild(heading)
 
     local lines = {}

@@ -291,7 +291,7 @@ local function BuildGeneral(scroll)
         AddCheckbox(group, "Announce a recap when someone leaves before a note would show",
             function() return departureSummary.enabled end,
             function(v) departureSummary.enabled = v end)
-        AddNote(group, "Right-clicking their name always offers \"Add Note\" with their real fight and chat data attached, whether or not the announcement is on.")
+        AddNote(group, "Right-clicking their name always offers \"Add Note\" with whatever was recorded while you were grouped attached, whether or not the announcement is on.")
     end)
 
     -- Developer tools are switched on with a hidden slash command only; the
@@ -362,6 +362,34 @@ local function BuildGeneral(scroll)
             function() return settings.paused end,
             function(v) settings.paused = v and true or false; addon:GetModule("Browser"):RefreshIfShown() end)
         AddNote(group, "Notes you write yourself keep working. /aj pause does the same.")
+
+        local tracking = settings.tracking
+        local function TrackingChanged()
+            addon:GetModule("ChatLog"):ApplySetting()
+            local browser = addon:GetModule("Browser")
+            browser:RefreshIfShown()
+            browser:RefreshStats()
+        end
+        AddCheckbox(group, "Record damage and healing numbers",
+            function() return tracking.damage end,
+            function(v) tracking.damage = v and true or false; TrackingChanged() end)
+        AddNote(group, "The DPS and HPS of everyone in your group, read from the game's damage meter after each fight. With this off, the note window has no group chart or fight list, and the Damage and Healing lines are hidden in your journal. Time grouped and time in combat are still recorded.")
+        AddCheckbox(group, "Keep chat with my notes",
+            function() return tracking.chat end,
+            function(v) tracking.chat = v and true or false; TrackingChanged() end)
+        AddNote(group, "The last few party, raid, say and whisper lines between you and someone you were grouped with, saved when you write a note on them. With this off, chat isn't read at all and the note window and journal don't show any.")
+        AddNote(group, "Turning either one off hides what is already saved without deleting it, so turning it back on brings it back. A note window that is already open changes the next time it opens. To remove it for good:")
+
+        local delNumbers = AceGUI:Create("Button")
+        delNumbers:SetText("Delete saved numbers")
+        delNumbers:SetWidth(200)
+        delNumbers:SetCallback("OnClick", function() StaticPopup_Show("ALLIESJOURNAL_DELETE_NUMBERS") end)
+        group:AddChild(delNumbers)
+        local delChat = AceGUI:Create("Button")
+        delChat:SetText("Delete saved chat")
+        delChat:SetWidth(200)
+        delChat:SetCallback("OnClick", function() StaticPopup_Show("ALLIESJOURNAL_DELETE_CHAT") end)
+        group:AddChild(delChat)
     end)
 
     Section(scroll, "Backup", function(group)
@@ -435,7 +463,7 @@ local function BuildSessions(scroll)
     end)
 
     Section(scroll, "When a session is recorded", function(group)
-        AddNote(group, "A session (grouped time, combat time, DPS/HPS) is saved only when BOTH minimums below are met. This keeps out non-combat grouping and trivial world mob-tagging.")
+        AddNote(group, "A session (grouped time, combat time, and DPS/HPS when those are recorded) is saved only when BOTH minimums below are met. This keeps out non-combat grouping and trivial world mob-tagging.")
         AddSlider(group, "Minimum time grouped (minutes)", 0, 30, 1,
             function() return math.floor(sessionGate.minGroupedSeconds / 60) end,
             function(v) sessionGate.minGroupedSeconds = v * 60 end, 0.5)
@@ -661,6 +689,8 @@ function Options:ResetAll()
     settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false, joinPanel = false }
     settings.streamerMode = false
     settings.paused = false
+    settings.tracking = { damage = true, chat = true }
+    addon:GetModule("ChatLog"):ApplySetting()
     settings.nearby = { enabled = false }
     settings.thanksMessage = "Thanks for the run, {name}!"
     settings.chatIcons = true
@@ -680,6 +710,34 @@ function Options:ResetAll()
     self:Refresh()
     self:Show()  -- rebuild so every control reflects the reset values
 end
+
+StaticPopupDialogs["ALLIESJOURNAL_DELETE_NUMBERS"] = {
+    text = "Delete the damage and healing numbers from all your notes and sessions?\n\nThis can't be undone. The notes and sessions themselves are kept. Backups made before now still contain the numbers.",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function()
+        local count = addon:DeleteSavedNumbers()
+        addon:Print(string.format("Deleted the damage and healing numbers from %d note%s and session%s.", count, count == 1 and "" or "s", count == 1 and "" or "s"))
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+StaticPopupDialogs["ALLIESJOURNAL_DELETE_CHAT"] = {
+    text = "Delete the chat saved with all your notes?\n\nThis can't be undone. The notes themselves are kept. Backups made before now still contain the chat.",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function()
+        local count = addon:DeleteSavedChat()
+        addon:Print(string.format("Deleted the chat saved with %d note%s.", count, count == 1 and "" or "s"))
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
 
 StaticPopupDialogs["ALLIESJOURNAL_RESET_SETTINGS"] = {
     text = "Reset every Allies Journal setting to its default?\n\nYour notes and player data are not affected.",

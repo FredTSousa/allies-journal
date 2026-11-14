@@ -187,6 +187,12 @@ function AlliesJournal:OnInitialize()
     -- copy of the journal (see Backup).
     if g.settings.chatIcons == nil then g.settings.chatIcons = true end
     if g.settings.paused == nil then g.settings.paused = false end
+    -- What gets recorded while grouped: damage/healing numbers and chat. Off
+    -- stops recording that kind and hides what is already saved; nothing is
+    -- deleted by the switch itself (see addon:TracksDamage / TracksChat).
+    g.settings.tracking = g.settings.tracking or {}
+    if g.settings.tracking.damage == nil then g.settings.tracking.damage = true end
+    if g.settings.tracking.chat == nil then g.settings.tracking.chat = true end
     g.settings.nearby = g.settings.nearby or {}
     if g.settings.nearby.enabled == nil then g.settings.nearby.enabled = false end
     if g.settings.streamerMode == nil then g.settings.streamerMode = false end

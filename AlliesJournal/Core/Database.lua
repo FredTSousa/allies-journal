@@ -990,6 +990,60 @@ function addon:IsStreamerMode()
     return self.db.global.settings.streamerMode and true or false
 end
 
+-- The two "what gets recorded" switches. Off means: that kind of data is
+-- not captured, not written into new notes or sessions, and not shown
+-- anywhere. What is already saved stays in the file untouched - only
+-- DeleteSavedNumbers / DeleteSavedChat below ever remove it.
+function addon:TracksDamage()
+    local tracking = self.db.global.settings.tracking
+    return not tracking or tracking.damage ~= false
+end
+
+function addon:TracksChat()
+    local tracking = self.db.global.settings.tracking
+    return not tracking or tracking.chat ~= false
+end
+
+local NUMBER_FIELDS = { "dps", "hps", "groupMaxDps", "groupMaxHps", "groupTotalDps", "groupTotalHps" }
+
+-- Removes the damage and healing numbers from every saved note and
+-- session, and from whatever is still held in memory for notes not yet
+-- written. Grouped time, combat time and the notes themselves are kept.
+-- Returns how many notes and sessions had numbers.
+function addon:DeleteSavedNumbers()
+    local count = 0
+    local function Strip(entry)
+        local had = false
+        for _, field in ipairs(NUMBER_FIELDS) do
+            if entry[field] ~= nil then had = true; entry[field] = nil end
+        end
+        if had then count = count + 1 end
+    end
+    for _, review in pairs(self.db.global.reviews) do Strip(review) end
+    for _, session in pairs(self.db.global.sessions) do Strip(session) end
+    self:GetModule("ReviewCapture"):StripAllNumbers()
+    self:GetModule("Browser"):RefreshIfShown()
+    return count
+end
+
+-- Removes the chat saved with every note, and the chat still held in
+-- memory for notes not yet written. Returns how many notes had chat.
+function addon:DeleteSavedChat()
+    local count = 0
+    for _, review in pairs(self.db.global.reviews) do
+        if review.chat and #review.chat > 0 then count = count + 1 end
+        review.chat = {}
+    end
+    self:GetModule("ChatLog").messages = {}
+    for _, snap in pairs(self:GetModule("RosterTracker").recentDepartures) do
+        snap.chat = {}
+    end
+    local browser = self:GetModule("Browser")
+    browser:RefreshIfShown()
+    browser:RefreshStats(true)
+    return count
+end
+
 -- Removes a player and everything kept about them: notes, sessions, tags, the
 -- pin and note in Recent Allies. Run notes and other players are untouched.
 function addon:ForgetPlayer(nameRealm)

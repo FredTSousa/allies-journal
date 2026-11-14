@@ -34,8 +34,20 @@ local BROADCAST_EVENTS = {
 }
 
 function ChatLog:OnEnable()
+    self:ApplySetting()
+end
+
+-- Listens for chat only while "Keep chat with my notes" is on; with it off
+-- the chat events aren't registered at all. Called at login and whenever
+-- the option changes. Lines already in the buffer are left alone.
+function ChatLog:ApplySetting()
+    local on = addon:TracksChat()
     for event in pairs(CHANNEL_LABELS) do
-        self:RegisterEvent(event, "OnChatMessage")
+        if on then
+            self:RegisterEvent(event, "OnChatMessage")
+        else
+            self:UnregisterEvent(event)
+        end
     end
 end
 
@@ -58,6 +70,7 @@ end
 -- grouped player's review, not a general chat logger picking up everyone
 -- else's chatter too.
 function ChatLog:OnChatMessage(event, text, playerName)
+    if not addon:TracksChat() then return end
     -- Chat payloads can be secret values where the client restricts them;
     -- those can't be inspected or stored, so skip the line.
     if issecretvalue and (issecretvalue(text) or issecretvalue(playerName)) then return end

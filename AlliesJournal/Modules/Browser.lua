@@ -989,10 +989,15 @@ local STATS_MAX_AGE = 300
 function Browser:RefreshStats(force)
     if not self.statsLabel then return end
     local s = addon:GetStorageStats(not force and STATS_MAX_AGE or nil)
+    -- No "Chat" size while chat isn't being kept and none is stored.
+    local chatPart = ""
+    if addon:TracksChat() or (s.chatBytes or 0) > 0 then
+        chatPart = "Chat " .. addon:FormatBytes(s.chatBytes) .. "  ·  "
+    end
     self.statsLabel:SetText(string.format(
-        "%d player(s) | %d session(s) | %d notes" .. (addon.db.global.settings.paused and "  |cffff9933recording paused|r" or "") .. "\nChat %s  ·  Sessions %s  ·  Notes %s  ·  Players %s  ·  Total %s",
+        "%d player(s) | %d session(s) | %d notes" .. (addon.db.global.settings.paused and "  |cffff9933recording paused|r" or "") .. "\n%sSessions %s  ·  Notes %s  ·  Players %s  ·  Total %s",
         s.playerCount, s.sessionCount, s.reviewCount,
-        addon:FormatBytes(s.chatBytes), addon:FormatBytes(s.sessionsBytes),
+        chatPart, addon:FormatBytes(s.sessionsBytes),
         addon:FormatBytes(s.reviewsBytes), addon:FormatBytes(s.playersBytes), addon:FormatBytes(s.totalBytes)))
 end
 
@@ -1238,8 +1243,11 @@ local function NoteText(note)
 end
 
 -- "Damage: 27 DPS  -  83% of the group's best  -  23% of the group total".
--- nil when there's nothing worth showing (under 1 per second).
+-- nil when there's nothing worth showing (under 1 per second), and while
+-- "Record damage and healing numbers" is off (saved numbers are hidden,
+-- not deleted).
 local function StatLine(label, unit, value, groupMax, groupTotal)
+    if not addon:TracksDamage() then return nil end
     if not value or value < 1 then return nil end
     local parts = {}
     if groupMax and groupMax > 0 then
@@ -1576,20 +1584,24 @@ function Browser:ShowHistory(nameRealm)
 
         local reviewID = review.id
 
-        local chatBtn = AceGUI:Create("Button")
-        chatBtn:SetText("View Chat")
-        chatBtn:SetWidth(110)
-        chatBtn:SetCallback("OnClick", function()
-            local lines = {}
-            for _, msg in ipairs(review.chat or {}) do
-                table.insert(lines, string.format("[%s] %s (%s): %s",
-                    date("%H:%M", msg.time), msg.from == "self" and "You" or addon:GetShortName(nameRealm),
-                    msg.channel, msg.text))
-            end
-            if #lines == 0 then lines = { "(no chat captured for this note)" } end
-            addon:GetModule("Export"):ShowText("Chat - " .. nameRealm .. " - " .. dateStr, table.concat(lines, "\n"))
-        end)
-        row:AddChild(chatBtn)
+        -- Only on a note that has chat, and only while "Keep chat with my
+        -- notes" is on (saved chat is hidden while it's off, not deleted).
+        if addon:TracksChat() and review.chat and #review.chat > 0 then
+            local chatBtn = AceGUI:Create("Button")
+            chatBtn:SetText("View Chat")
+            chatBtn:SetWidth(110)
+            chatBtn:SetCallback("OnClick", function()
+                local lines = {}
+                for _, msg in ipairs(review.chat or {}) do
+                    table.insert(lines, string.format("[%s] %s (%s): %s",
+                        date("%H:%M", msg.time), msg.from == "self" and "You" or addon:GetShortName(nameRealm),
+                        msg.channel, msg.text))
+                end
+                if #lines == 0 then lines = { "(no chat captured for this note)" } end
+                addon:GetModule("Export"):ShowText("Chat - " .. nameRealm .. " - " .. dateStr, table.concat(lines, "\n"))
+            end)
+            row:AddChild(chatBtn)
+        end
 
         local togetherBtn = AceGUI:Create("Button")
         togetherBtn:SetText("Together")

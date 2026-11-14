@@ -73,14 +73,21 @@ function ReviewCapture:OnCombatEnd()
     -- players - that's what makes the group-relative stats below possible
     -- without any extra API calls.
     local perGuid = {}
-    self:CaptureSessionType(sessionType, Enum.DamageMeterType and Enum.DamageMeterType.Dps, "dps", "amountPerSecond", perGuid)
-    self:CaptureSessionType(sessionType, Enum.DamageMeterType and Enum.DamageMeterType.Hps, "hps", "amountPerSecond", perGuid)
+    -- With "Record damage and healing numbers" off the damage meter isn't
+    -- read at all: perGuid stays empty, so every fight below still gets its
+    -- duration (the session gate needs combat time) but no numbers, no
+    -- group breakdown and no fight name.
+    local tracksDamage = addon:TracksDamage()
+    if tracksDamage then
+        self:CaptureSessionType(sessionType, Enum.DamageMeterType and Enum.DamageMeterType.Dps, "dps", "amountPerSecond", perGuid)
+        self:CaptureSessionType(sessionType, Enum.DamageMeterType and Enum.DamageMeterType.Hps, "hps", "amountPerSecond", perGuid)
+    end
     -- Interrupts/dispels/deaths would extend this same read pattern -
     -- confirmed via the documented Enum.DamageMeterType that Interrupts
     -- (5), Dispels (6), and Deaths (9) values exist, so this is no
     -- longer blocked on an unknown API - just not implemented yet.
 
-    local fightName = self:GetFightName(sessionType)
+    local fightName = tracksDamage and self:GetFightName(sessionType) or nil
 
     local roster = addon:GetModule("RosterTracker").roster
 
@@ -432,6 +439,49 @@ function ReviewCapture:ClearFights(guid)
     self.fights[guid] = nil
 end
 
+local FIGHT_NUMBER_FIELDS = {
+    "dps", "hps", "dpsRank", "hpsRank", "groupMaxDps", "groupMaxHps",
+    "groupDpsCount", "groupHpsCount", "groupTotalDps", "groupTotalHps",
+}
+
+local function StripFights(fights)
+    if type(fights) ~= "table" then return end
+    for _, fight in ipairs(fights) do
+        if type(fight) == "table" then
+            for _, field in ipairs(FIGHT_NUMBER_FIELDS) do fight[field] = nil end
+            fight.groupBreakdown = {}
+        end
+    end
+end
+
+-- For "Delete saved numbers": takes the damage and healing numbers off
+-- every fight still held for a note that hasn't been written yet - the live
+-- list, people who left recently, and the open or put-off note windows -
+-- and off the dungeon run kept for a /reload. Durations stay.
+function ReviewCapture:StripAllNumbers()
+    for _, fights in pairs(self.fights) do StripFights(fights) end
+
+    local tracker = addon:GetModule("RosterTracker")
+    for _, snap in pairs(tracker.recentDepartures) do StripFights(snap.fights) end
+
+    local prompt = addon:GetModule("ReviewPrompt")
+    if prompt.current then StripFights(prompt.current.fights) end
+    for _, data in ipairs(prompt.queue or {}) do StripFights(data.fights) end
+    for _, member in ipairs(prompt.group or {}) do
+        if member.data then StripFights(member.data.fights) end
+    end
+
+    local cache = AlliesJournalDB and AlliesJournalDB.runCache
+    if type(cache) == "table" and type(cache.cycles) == "table" then
+        for _, c in ipairs(cache.cycles) do
+            c.breakdown = {}
+            for _, entry in pairs(c.perGuid or {}) do
+                for _, field in ipairs(FIGHT_NUMBER_FIELDS) do entry[field] = nil end
+            end
+        end
+    end
+end
+
 -- Dumps whatever's been captured so far for `unit` (default target) into
 -- a copyable window, in a shape /pr capturereplay can load straight back
 -- into a review prompt later - so a REAL captured scenario (actual DPS
@@ -540,6 +590,14 @@ function ReviewCapture:AggregateFights(fights, selectedIndices)
     for _, m in ipairs(groupBreakdown) do
         if m.dps and (not groupMaxDps or m.dps > groupMaxDps) then groupMaxDps = m.dps end
         if m.hps and (not groupMaxHps or m.hps > groupMaxHps) then groupMaxHps = m.hps end
+    end
+
+    -- Numbers recorded before "Record damage and healing numbers" was turned
+    -- off can still be on these fights; they stay there (the switch deletes
+    -- nothing) but must not reach a new note or session, so every caller
+    -- gets an aggregate without them.
+    if not addon:TracksDamage() then
+        return { groupBreakdown = {}, interrupts = interrupts, dispels = dispels, deaths = deaths }
     end
 
     return {

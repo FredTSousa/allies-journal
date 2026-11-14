@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Two new switches in `/aj options`, General tab, under **Recording**: **Record damage and healing numbers** and **Keep chat with my notes**. Both are on by default. With one off, that kind of data is no longer read or saved, and the note window and journal leave it out: no group chart or fight list, no Damage and Healing lines, no chat box or View Chat button. With both off, the note window ends at the ratings. Time grouped and time in combat are still recorded.
+- Turning a switch off hides what is already saved without deleting it, so turning it back on brings it back. **Delete saved numbers** and **Delete saved chat**, next to the switches, remove it for good after asking first.
+- The note window is now only as tall as what's in it, so a short note no longer leaves an empty area above the buttons. The height in `/aj options` is the most it takes.
+- **View Chat** now only shows on notes that have chat.
+
 ## 1.3.0
 
 - In the **Runs** window, everyone in a run now has a button with their name. Click it to write a note on that person for that run: the note gets the run's place instead of "Manual", is linked to just that run, and says which run it's about at the top. A check on the button means you already have a note for that run, and clicking it opens that note to edit. Writing a note about an older run doesn't change when you last saw them.
