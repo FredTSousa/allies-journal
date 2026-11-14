@@ -2,8 +2,14 @@
 
 ## Unreleased
 
-- Two new switches in `/aj options`, General tab, under **Recording**: **Record damage and healing numbers** and **Keep chat with my notes**. Both are on by default. With one off, that kind of data is no longer read or saved, and the note window and journal leave it out: no group chart or fight list, no Damage and Healing lines, no chat box or View Chat button. With both off, the note window ends at the ratings. Time grouped and time in combat are still recorded.
-- Turning a switch off hides what is already saved without deleting it, so turning it back on brings it back. **Delete saved numbers** and **Delete saved chat**, next to the switches, remove it for good after asking first.
+- `/aj options` is reorganized into six tabs by what you're doing: **Notes** (writing a note and when the window opens), **Alerts** (what the addon tells you, by when it happens), **Display** (chat, Group Finder, Recent Allies, the journal window, the minimap button), **Badges**, **Tooltips**, and **Data & privacy** (what is recorded, backups, deleting and resetting). Your settings are unchanged, they have only moved.
+- Each option now has a short name with its explanation underneath. Nameplate badge settings grey out while the nameplate badge is off.
+- The options window can be resized, and no longer jumps back to the top after **Back up now** or a reset.
+- Everything that deletes or resets is together in **Delete and reset** at the bottom of the Data & privacy tab, and the confirmations now say what they do (Delete, Reset, Restore) instead of Yes and No.
+- Allies Journal is now listed in the game's own options (Esc > Options > AddOns), with a button that opens its options window.
+- A Thanks message left empty, or badge tex coords that aren't four numbers, now go back to the saved value and say why in chat, instead of being ignored silently.
+- Two new switches in `/aj options`, Data & privacy tab, under **What is recorded**: **Record damage and healing numbers** and **Keep chat with my notes**. Both are on by default. With one off, that kind of data is no longer read or saved, and the note window and journal leave it out: no group chart or fight list, no Damage and Healing lines, no chat box or View Chat button. With both off, the note window ends at the ratings. Time grouped and time in combat are still recorded.
+- Turning a switch off hides what is already saved without deleting it, so turning it back on brings it back. **Delete saved numbers** and **Delete saved chat**, at the bottom of the same tab, remove it for good after asking first.
 - The note window is now only as tall as what's in it, so a short note no longer leaves an empty area above the buttons. The height in `/aj options` is the most it takes.
 - **View Chat** now only shows on notes that have chat.
 

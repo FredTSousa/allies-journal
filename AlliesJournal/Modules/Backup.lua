@@ -82,7 +82,7 @@ function Backup:RunAutomatic()
         if Weight(now) < Weight(newest.counts or { players = 0, sessions = 0, notes = 0 }) * LOSS_RATIO then
             if not self.warnedLoss then
                 self.warnedLoss = true
-                addon:Print("Your journal holds a lot less than your last backup. If that is not expected, open /aj options and restore a backup from the General tab.")
+                addon:Print("Your journal holds a lot less than your last backup. If that is not expected, open /aj options and restore a backup from the Data & privacy tab.")
             end
             return
         end
@@ -110,8 +110,8 @@ end
 
 StaticPopupDialogs["ALLIESJOURNAL_RESTORE_BACKUP"] = {
     text = "Replace your whole journal with this backup?\n\n%s\n\nYour journal as it is now is saved as a backup first.",
-    button1 = YES,
-    button2 = NO,
+    button1 = "Restore",
+    button2 = CANCEL,
     OnAccept = function(_, data)
         if addon:GetModule("Backup"):Restore(data.index) then
             addon:Print("Restored your journal from the backup. Type /reload to be sure everything is refreshed.")
