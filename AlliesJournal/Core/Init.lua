@@ -563,7 +563,7 @@ function AlliesJournal:SlashCommand(input)
             self:Print("  /aj inspectframe <GlobalFrameName> - dump a named frame's regions, e.g. TargetFrame, CompactPartyFrameMember1")
             self:Print("  /aj recentallies - dump C_RecentAllies system status + every cached entry, and cross-check it against your players with notes, into a copyable window")
             self:Print("  /pr recentallydebug - toggle live logging of what SetRecentAllyPinned/SetRecentAllyNote actually return when a review is saved, to debug a pin/note that isn't sticking")
-            self:Print("  /aj allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) into a copyable window; defaults to the selected player or your target")
+            self:Print("  /aj allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) and what Battle.net reports for them into a copyable window; defaults to the selected player or your target")
             self:Print("  /aj badgetest - toggle a fake badge on every party/raid frame and nameplate found, to check placement without a group")
         end
     end
@@ -618,7 +618,9 @@ end
 -- (readable type name, description, timestamp, and the full contextData),
 -- the note, and finally the entire raw record. Matches by (partial,
 -- case-insensitive) name against fullName; with no name it uses the player
--- selected in /pr, else your target.
+-- selected in /pr, else your target. Then whatever Battle.net reports for a
+-- character of that name, because the journal takes a friend's online
+-- status from Battle.net over Recent Allies, and the two can disagree.
 function AlliesJournal:DumpRecentAllyDetails(query)
     if not C_RecentAllies then
         self:Print("C_RecentAllies doesn't exist on this client.")
@@ -658,6 +660,10 @@ function AlliesJournal:DumpRecentAllyDetails(query)
                 tostring(char.fullName), tostring(char.level), tostring(char.classID), tostring(char.raceID)))
             table.insert(lines, "character: " .. self:Serialize(char))
             table.insert(lines, "state: " .. self:Serialize(ally.stateData or {}))
+            if char.guid and C_BattleNet and C_BattleNet.GetAccountInfoByGUID then
+                local okInfo, info = pcall(C_BattleNet.GetAccountInfoByGUID, char.guid)
+                table.insert(lines, "Battle.net by GUID: " .. ((okInfo and info) and self:Serialize(info.gameAccountInfo or {}) or "no match"))
+            end
             table.insert(lines, "note: " .. tostring(ally.interactionData and ally.interactionData.note))
 
             local interactions = {}
@@ -681,11 +687,50 @@ function AlliesJournal:DumpRecentAllyDetails(query)
         end
     end
 
-    if matches == 0 then
-        self:Print(string.format("No Recent Allies entry matches '%s'.", query))
+    -- Every Battle.net game account on a character of that name. Account
+    -- fields are limited to presence ones, so BattleTags and notes stay out
+    -- of a dump that may get pasted somewhere.
+    local bnetLines, bnetMatches = {}, 0
+    local bnetOk, bnetErr = pcall(function()
+        for i = 1, BNGetNumFriends() do
+            local account = C_BattleNet.GetFriendAccountInfo(i)
+            for j = 1, C_BattleNet.GetFriendNumGameAccounts(i) do
+                local game = C_BattleNet.GetFriendGameAccountInfo(i, j)
+                local name = game and type(game.characterName) == "string" and game.characterName
+                if name and name:lower():find(needle, 1, true) then
+                    bnetMatches = bnetMatches + 1
+                    -- The same test GetFriendStatuses uses.
+                    local counts = game.isOnline and game.clientProgram == BNET_CLIENT_WOW and game.wowProjectID == WOW_PROJECT_ID
+                    table.insert(bnetLines, string.format("=== Battle.net friend %d, game account %d: %s ===", i, j, name))
+                    table.insert(bnetLines, "journal counts this as online: " .. tostring(counts and true or false))
+                    if account then
+                        table.insert(bnetLines, string.format("account: isAFK=%s isDND=%s appearOffline=%s lastOnlineTime=%s",
+                            tostring(account.isAFK), tostring(account.isDND), tostring(account.appearOffline),
+                            account.lastOnlineTime and date("%Y-%m-%d %H:%M", account.lastOnlineTime) or "nil"))
+                    end
+                    table.insert(bnetLines, "game account: " .. self:Serialize(game))
+                    table.insert(bnetLines, "")
+                end
+            end
+        end
+    end)
+
+    if matches == 0 and bnetMatches == 0 and bnetOk then
+        self:Print(string.format("Neither Recent Allies nor Battle.net has anyone matching '%s'.", query))
         return
     end
-    self:GetModule("Export"):ShowText("Recent Ally: " .. query, table.concat(lines, "\n"))
+    if matches == 0 then
+        table.insert(lines, string.format("(no Recent Allies entry matches '%s')", query))
+        table.insert(lines, "")
+    end
+    table.insert(lines, string.format("--- Battle.net, %s ---", date("%Y-%m-%d %H:%M:%S")))
+    if not bnetOk then
+        table.insert(lines, "Battle.net scan failed: " .. tostring(bnetErr))
+    elseif bnetMatches == 0 then
+        table.insert(lines, string.format("(no Battle.net friend is on a character matching '%s')", query))
+    end
+    for _, line in ipairs(bnetLines) do table.insert(lines, line) end
+    self:GetModule("Export"):ShowText("Ally info: " .. query, table.concat(lines, "\n"))
 end
 
 -- Pins every reviewed player who isn't pinned in Recent Allies yet, except
