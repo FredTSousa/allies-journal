@@ -1096,8 +1096,12 @@ function Browser:RefreshList()
             or (show == "recent" and recentAlly ~= nil)
             or (show == "other" and recentAlly == nil)
         if passesRole and passesRating and passesSource then
-            -- Only people with a note are worth a /who click.
-            if latest and not recentAlly and not friendEntry then table.insert(self.shownNonRecent, record.nameRealm) end
+            -- Only people with a note are worth a /who click. Friends never
+            -- are: Battle.net already says whether they're on, and an offline
+            -- friend has no friendEntry, so the remembered flag covers them.
+            if latest and not recentAlly and not friendEntry and not record.friend then
+                table.insert(self.shownNonRecent, record.nameRealm)
+            end
             local presence = 2
             if allyData then
                 presence = (allyData.stateData and allyData.stateData.isOnline) and 0 or 1
