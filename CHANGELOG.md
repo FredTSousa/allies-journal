@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.5.0
+
+- The journal could show someone as online long after they had logged off. Recent Allies only checks who's online when its own list is opened in the Social window, and addons aren't allowed to ask it. Now the journal redraws as soon as Recent Allies has new statuses, and a **Refresh** button under the list opens that list for you so the statuses update. It doesn't work in combat.
+- Next to it, **Recent Allies status** says how old those statuses are: green under 2 minutes, yellow up to 10, then red and pulsing when it's time to refresh.
+- The journal window is laid out again: search and filters on top, the Recent Allies line and **Check Not Recent** under the list, and **Runs** and **In numbers** along the bottom. The list has more room.
+- The storage sizes and **Clean Up** moved from the journal to `/aj options`, in a new **Storage** section on the Data & privacy tab. Clean Up's confirmation now says what it deletes and what it keeps, with Delete and Cancel buttons.
+- The **Pin Journal** and **Nearby** buttons are gone from the journal window; use `/aj pinjournal` and `/aj nearby`.
+- "Recording paused" now shows in the journal's title.
+
 ## 1.4.0
 
 - `/aj options` is reorganized into six tabs by what you're doing: **Notes** (writing a note and when the window opens), **Alerts** (what the addon tells you, by when it happens), **Display** (chat, Group Finder, Recent Allies, the journal window, the minimap button), **Badges**, **Tooltips**, and **Data & privacy** (what is recorded, backups, deleting and resetting). Your settings are unchanged, they have only moved.
