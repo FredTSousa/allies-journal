@@ -345,6 +345,92 @@ function addon:GetFriendStatuses()
     return statuses
 end
 
+-- A Battle.net account's key in g.friendCharacters: a hash of its BattleTag,
+-- so no BattleTag is written to the saved file.
+local function FriendAccountKey(battleTag)
+    local h = 5381
+    for i = 1, #battleTag do h = (h * 33 + battleTag:byte(i)) % 2147483647 end
+    return "a" .. h
+end
+
+local function SameRealmName(a, b)
+    if type(a) ~= "string" or type(b) ~= "string" or a == "" or b == "" then return false end
+    return a:gsub("%s", ""):lower() == b:gsub("%s", ""):lower()
+end
+
+-- Whether a friend's character is one you could invite: on your server and
+-- your faction. The realm ID decides when both sides report one, the realm
+-- name otherwise (spaces and case ignored). A friend who reports no realm
+-- or no faction doesn't count, as with a realm ID of 0 in the game's own
+-- friends list. Forever's servers have names like "CAMWOW EU4 Realm 3 PvE".
+function addon:IsOnMyServerAndFaction(realmID, realmName, faction)
+    if type(faction) ~= "string" or faction ~= UnitFactionGroup("player") then return false end
+    local myID = GetRealmID and GetRealmID()
+    if type(realmID) == "number" and realmID > 0 and type(myID) == "number" and myID > 0 then
+        return realmID == myID
+    end
+    return SameRealmName(realmName, GetRealmName())
+end
+
+-- Every friend you could invite that the journal can put a character name
+-- to, for "Show all my friends" in the journal list. Keyed by lowercase
+-- short name: { name = character name, entry = FriendEntry }. The legacy
+-- list names offline friends too, and only holds your own faction.
+-- Battle.net only names the character a friend is playing right now, so the
+-- last one seen on your server and faction is remembered per account (with
+-- that server and faction) and stands in while they're offline or on
+-- another character. Only friends still on the list come back. Also called
+-- on friend events while the switch is on, to keep that memory current
+-- with the journal closed (see Browser:OnEnable).
+function addon:GetFriendCharacters()
+    local friends = {}
+    pcall(function()
+        local myRealm = GetRealmName()
+        for i = 1, C_FriendList.GetNumFriends() do
+            local info = C_FriendList.GetFriendInfoByIndex(i)
+            local short = info and info.name and self:GetShortName(info.name)
+            -- A name with "-Realm" is on another realm, unless it's yours.
+            local realm = info and info.name and info.name:match("%-(.+)$")
+            if short and short ~= "" and (not realm or SameRealmName(realm, myRealm)) then
+                friends[short:lower()] = { name = info.name,
+                    entry = FriendEntry(info.level, info.className, info.connected, info.afk, info.dnd, info.area) }
+            end
+        end
+    end)
+    pcall(function()
+        local remembered = self.db.global.friendCharacters
+        for i = 1, BNGetNumFriends() do
+            local playing
+            for j = 1, C_BattleNet.GetFriendNumGameAccounts(i) do
+                local game = C_BattleNet.GetFriendGameAccountInfo(i, j)
+                local short = game and game.isOnline and game.clientProgram == BNET_CLIENT_WOW
+                    and game.wowProjectID == WOW_PROJECT_ID and self:GetShortName(game.characterName)
+                local realmName = game and (game.realmName ~= "" and game.realmName or game.realmDisplayName)
+                if short and short ~= "" and self:IsOnMyServerAndFaction(game.realmID, realmName, game.factionName) then
+                    friends[short:lower()] = { name = short,
+                        entry = FriendEntry(game.characterLevel, game.className, true, game.isGameAFK, game.isGameBusy, game.areaName) }
+                    playing = playing or { name = short, level = game.characterLevel, className = game.className,
+                        realmID = game.realmID, realmName = realmName, faction = game.factionName }
+                end
+            end
+            local account = C_BattleNet.GetFriendAccountInfo(i)
+            local tag = account and type(account.battleTag) == "string" and account.battleTag ~= "" and account.battleTag
+            if tag then
+                local key = FriendAccountKey(tag)
+                local last = remembered[key]
+                if playing then
+                    playing.seen = time()
+                    remembered[key] = playing
+                elseif last and last.name and not friends[last.name:lower()]
+                    and self:IsOnMyServerAndFaction(last.realmID, last.realmName, last.faction) then
+                    friends[last.name:lower()] = { name = last.name, entry = FriendEntry(last.level, last.className, false) }
+                end
+            end
+        end
+    end)
+    return friends
+end
+
 -- The actual pin + note calls, with no verification (see SyncRecentAlly).
 function addon:ApplyRecentAlly(guid, review)
     local pinOk, pinErr = pcall(C_RecentAllies.SetRecentAllyPinned, guid, true)
@@ -737,8 +823,10 @@ end
 -- in your notes. Several words all have to match (in any order, anywhere),
 -- so "funny healer" finds a note that says "funny" and one that says "healer".
 -- classOf(record) may supply a class for players saved before classes were
--- stored (the browser passes one that asks Recent Allies).
-function addon:SearchPlayers(query, classOf)
+-- stored (the browser passes one that asks Recent Allies). extra (optional)
+-- is more records to search along with the journal's own: the stand-ins the
+-- browser makes for friends with nothing in the journal.
+function addon:SearchPlayers(query, classOf, extra)
     query = query and strtrim(query:lower()) or ""
     local words, filters = {}, {}
     for word in query:gmatch("%S+") do
@@ -750,8 +838,11 @@ function addon:SearchPlayers(query, classOf)
         end
     end
 
+    local candidates = self:GetAllKnownPlayers()
+    for _, record in ipairs(extra or {}) do table.insert(candidates, record) end
+
     local list = {}
-    for _, record in ipairs(self:GetAllKnownPlayers()) do
+    for _, record in ipairs(candidates) do
         local matches = true
         for _, filter in ipairs(filters) do
             local key, value = filter.key, filter.value

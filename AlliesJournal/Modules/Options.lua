@@ -278,6 +278,10 @@ local function BuildNotes(scroll)
             function() return settings.windowNoteLimit or 3 end,
             function(v) settings.windowNoteLimit = v end)
         AddNote(group, "After that you get a line in chat with an Add a note link instead, no more often than the wait above. Only notes you wrote count, not windows you skipped. 0 always opens the window.")
+        AddCheckbox(group, "Don't ask about my friends",
+            "Friends are left out of the note window, the Add a note line in chat, and the recap after a short group. Their sessions are still recorded, and you can still right-click a friend's name to write a note.",
+            function() return settings.skipFriends end,
+            function(v) settings.skipFriends = v end)
     end)
 
     Section(scroll, "Note window size", function(group)
@@ -399,6 +403,23 @@ local function BuildDisplay(scroll)
                 browserList.rowPadding = v
                 addon:GetModule("Browser"):RefreshList()
             end)
+        local friendsOnTop
+        AddCheckbox(group, "Show friends I can invite",
+            "Friends on your server and faction get a card in the journal even when you have no note on them. Battle.net only names the character a friend is playing right now, so an offline Battle.net friend shows as the last character the journal saw them on (on your server and faction), once it has seen them online with this switch on.",
+            function() return browserList.showFriends end,
+            function(v)
+                browserList.showFriends = v
+                SetEnabled({ friendsOnTop }, v)
+                addon:GetModule("Browser"):RefreshList()
+            end)
+        friendsOnTop = AddCheckbox(group, "Friends at the top of the list",
+            "Online friends first, then everyone else who's online, then offline friends, then the rest.",
+            function() return browserList.friendsOnTop end,
+            function(v)
+                browserList.friendsOnTop = v
+                addon:GetModule("Browser"):RefreshList()
+            end)
+        SetEnabled({ friendsOnTop }, browserList.showFriends)
     end)
 
     Section(scroll, "Minimap button", function(group)
@@ -827,12 +848,13 @@ function Options:ResetAll()
     settings.retention = { purgeDays = 60 }
     settings.reviewWindow = { width = 550, height = 700 }
     settings.departureSummary = { enabled = true }
-    settings.browserList = { rowPadding = 4, cardFade = 0.25, offlineDim = 0.55 }
+    settings.browserList = { rowPadding = 4, cardFade = 0.25, offlineDim = 0.55, showFriends = false, friendsOnTop = true }
     settings.recentAllies = { pinBad = false }
     settings.simpleNotes = false
     settings.playerStrip = true
     settings.askAgainHours = 12
     settings.windowNoteLimit = 3
+    settings.skipFriends = false
     settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false, joinPanel = false }
     settings.streamerMode = false
     settings.paused = false

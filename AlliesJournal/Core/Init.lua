@@ -87,6 +87,7 @@ function AlliesJournal:OnInitialize()
     g.reviews = g.reviews or {}    -- [reviewId]  = review
     g.runNotes = g.runNotes or {}  -- [runId] = your note about a whole run (see GetRuns)
     g.sessions = g.sessions or {}  -- [sessionId] = session (see RosterTracker's session-eligibility gate)
+    g.friendCharacters = g.friendCharacters or {}  -- last character seen per Battle.net friend (see GetFriendCharacters)
     g.settings = g.settings or { gateMinutes = 10 }  -- minutes grouped together before a review can queue
     -- Session history thresholds: a session only gets recorded when BOTH
     -- are cleared (not either) - deliberately excludes non-combat grouping
@@ -141,6 +142,11 @@ function AlliesJournal:OnInitialize()
     -- Browser's player list card spacing, editable via /pr options.
     g.settings.browserList = g.settings.browserList or {}
     g.settings.browserList.rowPadding = g.settings.browserList.rowPadding or 4
+    -- "Show all my friends": friends with nothing in the journal get a card
+    -- too, and (friendsOnTop) friends go to the top of the list. See
+    -- Browser:RefreshList and addon:GetFriendCharacters.
+    if g.settings.browserList.showFriends == nil then g.settings.browserList.showFriends = false end
+    if g.settings.browserList.friendsOnTop == nil then g.settings.browserList.friendsOnTop = true end
     -- Player list colors {r, g, b, a}, tunable from /pr options when
     -- developer tools are on. Missing entries get their default.
     -- (Bumping the version replaces saved colors with the current
@@ -175,6 +181,8 @@ function AlliesJournal:OnInitialize()
     -- Notes on someone before the window turns into a chat line (see
     -- RosterTracker:KnownWell). 0 always opens the window.
     if g.settings.windowNoteLimit == nil then g.settings.windowNoteLimit = 3 end
+    -- Friends never get the automatic note window (see RosterTracker:SkipsAsFriend).
+    if g.settings.skipFriends == nil then g.settings.skipFriends = false end
     -- Small chat reminders: someone you have a note on joins your group, and
     -- someone you noted as Great comes online.
     g.settings.notices = g.settings.notices or {}
@@ -705,6 +713,12 @@ function AlliesJournal:DumpRecentAllyDetails(query)
                     local counts = game.isOnline and game.clientProgram == BNET_CLIENT_WOW and game.wowProjectID == WOW_PROJECT_ID
                     table.insert(bnetLines, string.format("=== Battle.net friend %d, game account %d: %s ===", i, j, name))
                     table.insert(bnetLines, "journal counts this as online: " .. tostring(counts and true or false))
+                    -- What "Show all my friends" checks (see IsOnMyServerAndFaction).
+                    local realmName = game.realmName ~= "" and game.realmName or game.realmDisplayName
+                    table.insert(bnetLines, string.format("on your server and faction: %s (realm ID %s, yours %s; realm %q, yours %q; faction %s, yours %s)",
+                        tostring(self:IsOnMyServerAndFaction(game.realmID, realmName, game.factionName)),
+                        tostring(game.realmID), tostring(GetRealmID and GetRealmID()), tostring(realmName), tostring(GetRealmName()),
+                        tostring(game.factionName), tostring((UnitFactionGroup("player")))))
                     if account then
                         table.insert(bnetLines, string.format("account: isAFK=%s isDND=%s appearOffline=%s lastOnlineTime=%s",
                             tostring(account.isAFK), tostring(account.isDND), tostring(account.appearOffline),

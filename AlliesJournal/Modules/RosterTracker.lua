@@ -321,6 +321,17 @@ function RosterTracker:KnownWell(nameRealm)
     return limit > 0 and #addon:GetReviewsForPlayer(nameRealm) >= limit
 end
 
+-- "Don't ask about my friends" (/aj options): friends never get the note
+-- window, its chat link instead, or the recap line after a short group. The
+-- friend flag on their record is refreshed each time they join your group
+-- (OnRosterUpdate); the GUID check covers a friend with no record yet.
+function RosterTracker:SkipsAsFriend(nameRealm, guid)
+    if not addon.db.global.settings.skipFriends then return false end
+    local record = nameRealm and addon.db.global.players[nameRealm]
+    if record and record.friend then return true end
+    return addon:IsFriend(guid)
+end
+
 function RosterTracker:MarkAsked(nameRealm)
     AlliesJournalDB.askedAt = AlliesJournalDB.askedAt or {}
     AlliesJournalDB.askedAt[nameRealm] = time()
@@ -620,7 +631,8 @@ function RosterTracker:OnRosterUpdate()
                 -- for this guid - a real prompt already tells you it's
                 -- there; this is specifically for the case where nothing
                 -- would otherwise show up at all.
-                if not raidContext and addon.db.global.settings.departureSummary.enabled and groupedSeconds < gateSeconds then
+                if not raidContext and addon.db.global.settings.departureSummary.enabled and groupedSeconds < gateSeconds
+                    and not self:SkipsAsFriend(d.data.nameRealm, d.guid) then
                     local shortName = addon:GetShortName(d.data.nameRealm)
                     local link = string.format("|Hplayer:%s|h[%s]|h", d.data.nameRealm, shortName)
                     -- Class-colored like a normal chat name. GUID-based, so
@@ -825,7 +837,9 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId, trigge
         -- The same checks as always, in order; the first one that fails is
         -- what "/aj why" reports.
         local skip
-        if not since then
+        if self:SkipsAsFriend(nameRealm, c.guid) then
+            skip = "they're your friend, and \"Don't ask about my friends\" is on in /aj options"
+        elseif not since then
             skip = "no record of when you grouped up with them"
         elseif time() - since < gateSeconds then
             skip = string.format("together %s of the %s needed%s", FormatDuration(time() - since),
@@ -1114,6 +1128,10 @@ function RosterTracker:ExplainPrompt(input)
         else
             table.insert(lines, "not in your group")
         end
+    end
+
+    if self:SkipsAsFriend(nameRealm, guid) then
+        table.insert(lines, "they're your friend, so they're never asked about (\"Don't ask about my friends\" in /aj options)")
     end
 
     local askedKind, askedAt, askedUntil = self:AskedRecentlyInfo(nameRealm)

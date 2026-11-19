@@ -639,6 +639,9 @@ function Browser:OnEnable()
         self.friendRefreshPending = true
         C_Timer.After(2, function()
             self.friendRefreshPending = false
+            -- Keeps the last character seen for each Battle.net friend
+            -- current while the journal is closed (see GetFriendCharacters).
+            if addon.db.global.settings.browserList.showFriends then pcall(addon.GetFriendCharacters, addon) end
             if not (self.frame and self.frame:IsShown()) then return end
             local ok, signature = pcall(StatusSignature)
             if not ok or signature ~= self.lastStatuses then
@@ -1291,9 +1294,37 @@ function Browser:RefreshList()
     -- then name.
     local entries = {}
     self.shownNonRecent = {}
-    -- For players saved before classes were stored, Recent Allies knows it.
+    local listSettings = addon.db.global.settings.browserList
+
+    -- "Show all my friends" (/aj options, Display): a friend with nothing in
+    -- the journal (no note, no session) gets a card too. Their record is
+    -- the saved one when it only holds a favorite, or a stand-in that is
+    -- never saved. friendOnly maps that record to its friend status, which
+    -- for an offline Battle.net friend is the last character seen.
+    local friendOnly, friendRecords = {}, {}
+    if listSettings.showFriends then
+        local known = {}
+        for nameRealm, record in pairs(addon.db.global.players) do
+            if #(record.reviews or {}) > 0 or #(record.sessions or {}) > 0 then
+                known[(addon:GetShortName(nameRealm) or ""):lower()] = true
+            end
+        end
+        for key, friend in pairs(addon:GetFriendCharacters()) do
+            if not known[key] then
+                local nameRealm = addon:NormalizeChatSender(friend.name)
+                local record = addon.db.global.players[nameRealm]
+                    or { nameRealm = nameRealm, lastSeen = {}, reviews = {}, sessions = {} }
+                friendOnly[record] = friend.entry
+                table.insert(friendRecords, record)
+            end
+        end
+    end
+
+    -- For players saved before classes were stored, Recent Allies knows it
+    -- (or the friends list, for a friend).
     local function ClassFileOf(record)
         local ally = AllyFromIndex(allyIndex, record.nameRealm)
+            or FriendStatusOf(friendStatuses, record.nameRealm) or friendOnly[record]
         local classID = ally and ally.characterData and ally.characterData.classID
         if not classID then return nil end
         local ok, info = pcall(C_CreatureInfo.GetClassInfo, classID)
@@ -1308,12 +1339,12 @@ function Browser:RefreshList()
         inParty = {}
         for _, member in pairs(addon:GetModule("RosterTracker").roster) do inParty[member.nameRealm] = true end
     end
-    for _, record in ipairs(addon:SearchPlayers(self.searchText, ClassFileOf)) do
+    for _, record in ipairs(addon:SearchPlayers(self.searchText, ClassFileOf, friendRecords)) do
         local latest = addon:GetLatestReview(record.nameRealm)
         local passesRole = self.roleFilter == "All" or (latest and latest.role == self.roleFilter)
         local passesRating = self.ratingFilter == "All" or ReviewClass(latest) == self.ratingFilter
         local recentAlly = AllyFromIndex(allyIndex, record.nameRealm)
-        local friendEntry = FriendStatusOf(friendStatuses, record.nameRealm)
+        local friendEntry = FriendStatusOf(friendStatuses, record.nameRealm) or friendOnly[record]
         -- Remembered, because Battle.net can't name a friend's character while they're offline.
         if friendEntry then record.friend = true end
         -- Neither of those: use what a /who check found, if run.
@@ -1337,10 +1368,21 @@ function Browser:RefreshList()
             if allyData then
                 presence = (allyData.stateData and allyData.stateData.isOnline) and 0 or 1
             end
-            table.insert(entries, { record = record, latest = latest, allyData = allyData, presence = presence })
+            table.insert(entries, { record = record, latest = latest, allyData = allyData, presence = presence,
+                friendOnly = friendOnly[record] ~= nil })
         end
     end
+    -- "Friends at the top of the list" goes with "Show all my friends":
+    -- online friends, then everyone else online, then offline friends (or
+    -- with no status), then everyone else.
+    local friendsFirst = listSettings.showFriends and listSettings.friendsOnTop
     table.sort(entries, function(x, y)
+        if friendsFirst then
+            local xo, yo = x.presence == 0, y.presence == 0
+            if xo ~= yo then return xo end
+            local xf, yf = x.record.friend and 0 or 1, y.record.friend and 0 or 1
+            if xf ~= yf then return xf < yf end
+        end
         if x.presence ~= y.presence then return x.presence < y.presence end
         if x.presence == 0 then
             -- Online: by star color (green, yellow, no note, then red), then highest level.
@@ -1372,7 +1414,7 @@ function Browser:RefreshList()
     for _, entry in ipairs(entries) do
         local record, latest, allyData = entry.record, entry.latest, entry.allyData
         do
-            local lastSeen = record.lastSeen.date and ('Seen ' .. date('%Y-%m-%d', record.lastSeen.date)) or ''
+            local lastSeen = (record.lastSeen and record.lastSeen.date) and ('Seen ' .. date('%Y-%m-%d', record.lastSeen.date)) or ''
             -- Where that was: lastSeen.zone is stamped by both sessions and
             -- reviews, so it's the most recent of either (including the
             -- one a review was written for). Placeholder values from
@@ -1388,6 +1430,8 @@ function Browser:RefreshList()
                 else
                     summary = string.format('Social: %s   Perf: %s', RatingText("social", latest.social), RatingText("performance", latest.performance))
                 end
+            elseif entry.friendOnly then
+                summary = '|cff888888Friend - no notes yet|r'
             else
                 summary = string.format('|cff888888No reviews yet - %d session(s)|r', #record.sessions)
             end
@@ -1541,6 +1585,8 @@ function Browser:ShowCardMenu(owner, nameRealm)
         end
         local record = addon.db.global.players[nameRealm]
         root:CreateButton(record and record.favorite and "Remove from favorites" or "Add to favorites", function()
+            -- A friend shown by "Show all my friends" may have no record yet.
+            addon:GetOrCreatePlayer(nameRealm)
             addon:ToggleFavorite(nameRealm)
             self:RefreshList()
         end)
@@ -1555,9 +1601,12 @@ function Browser:ShowCardMenu(owner, nameRealm)
                 StaticPopup_Show("ALLIESJOURNAL_IGNORE_PLAYER", short, nil, short)
             end)
         end
-        root:CreateButton("Forget player", function()
-            StaticPopup_Show("ALLIESJOURNAL_FORGET_PLAYER", addon:GetShortName(nameRealm), nil, { nameRealm = nameRealm })
-        end)
+        -- Nothing to forget for a friend with no record.
+        if record then
+            root:CreateButton("Forget player", function()
+                StaticPopup_Show("ALLIESJOURNAL_FORGET_PLAYER", addon:GetShortName(nameRealm), nil, { nameRealm = nameRealm })
+            end)
+        end
     end)
 end
 

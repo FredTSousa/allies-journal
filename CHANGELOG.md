@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- New switch in `/aj options`, Display tab, under **Journal window**: **Show friends I can invite**. Friends on your server and faction get a card in the journal, even with no note on them yet, marked "Friend - no notes yet". Right-click one to whisper, invite or write a note. A friend you have a note or a session with keeps their usual card. It's off by default.
+- With it on, **Friends at the top of the list** (on by default) orders the list as online friends, then everyone else who's online, then offline friends, then the rest.
+- Battle.net only says which character a friend is playing while they're online. Once the journal has seen a friend online on your server and faction with the switch on, it shows them as that character when they're offline too. It stores this without their BattleTag.
+- New switch in `/aj options`, Notes tab, under **When the note window opens**: **Don't ask about my friends**. Friends are left out of the note window, the Add a note line in chat, and the recap after a short group. Their sessions are still recorded, and right-clicking their name still writes a note. It's off by default. `/aj why <name>` says when this is why someone wasn't asked.
+
 ## 1.5.0
 
 - The journal could show someone as online long after they had logged off. Recent Allies only checks who's online when its own list is opened in the Social window, and addons aren't allowed to ask it. Now the journal redraws as soon as Recent Allies has new statuses, and a **Refresh** button under the list opens that list for you so the statuses update. It doesn't work in combat.
