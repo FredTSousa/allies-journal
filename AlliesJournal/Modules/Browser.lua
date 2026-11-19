@@ -542,29 +542,9 @@ StaticPopupDialogs["ALLIESJOURNAL_DELETE_REVIEW"] = {
         addon:DeleteReview(data.nameRealm, data.reviewID)
         local browser = addon:GetModule("Browser")
         browser:RefreshList()
-        browser:RefreshStats(true)
+        -- The storage sizes in /aj options are worked out again next time.
+        addon.storageSizes = nil
         browser:ShowHistory(data.nameRealm)
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
--- text is pre-formatted and passed as arg1 (rather than using this
--- dialog's own %s substitution, which Blizzard caps at two args) since
--- the confirmation needs to show count/day-threshold/bytes-freed all at
--- once - see Browser:ShowCleanupConfirm.
-StaticPopupDialogs["ALLIESJOURNAL_CLEANUP_SESSIONS"] = {
-    text = "%s",
-    button1 = YES,
-    button2 = NO,
-    OnAccept = function(_, data)
-        local removed = addon:ApplySessionCleanup(data.eligible)
-        addon:Print(string.format("Cleaned up %d old session(s).", removed))
-        local browser = addon:GetModule("Browser")
-        browser:RefreshList()
-        browser:RefreshStats(true)
     end,
     timeout = 0,
     whileDead = true,
@@ -635,8 +615,8 @@ function Browser:OnEnable()
     -- the game) and RECENT_ALLY_DATA_UPDATED both fire constantly, so the
     -- list is batched and only redrawn when someone's status really changed.
     -- For Recent Allies that's online, AFK and DND: changing zone alone
-    -- doesn't redraw.
-    local lastStatuses
+    -- doesn't redraw. self.lastStatuses is the last one seen while the list
+    -- was open; Show clears it, since nothing is compared while it's closed.
     local function StatusSignature()
         local parts = {}
         for name, entry in pairs(addon:GetFriendStatuses()) do
@@ -661,8 +641,8 @@ function Browser:OnEnable()
             self.friendRefreshPending = false
             if not (self.frame and self.frame:IsShown()) then return end
             local ok, signature = pcall(StatusSignature)
-            if not ok or signature ~= lastStatuses then
-                lastStatuses = ok and signature or nil
+            if not ok or signature ~= self.lastStatuses then
+                self.lastStatuses = ok and signature or nil
                 self:RefreshIfShown()
             end
         end)
@@ -673,9 +653,266 @@ function Browser:OnEnable()
     -- On this module, not the addon: the addon already handles
     -- RECENT_ALLY_DATA_UPDATED (pin retries), and AceEvent keeps one handler
     -- per event per object, so registering it there would replace that one.
-    for _, event in ipairs({ "RECENT_ALLY_DATA_UPDATED", "RECENT_ALLIES_DATA_READY" }) do
-        pcall(self.RegisterEvent, self, event, RefreshSoon)
+    -- RECENT_ALLIES_CACHE_UPDATE matters most: the game only refreshes
+    -- Recent Allies' online status when its own Recent Allies list opens
+    -- and asks (TryRequestRecentAlliesData, which addons can't call: it
+    -- raises ADDON_ACTION_FORBIDDEN even inside pcall). Between those, Recent Allies can show someone
+    -- online long after they've logged off.
+    local function OnAlliesEvent(event)
+        if event == "RECENT_ALLIES_DATA_READY" then self.alliesAsOf = time() end
+        RefreshSoon()
     end
+    for _, event in ipairs({ "RECENT_ALLY_DATA_UPDATED", "RECENT_ALLIES_DATA_READY", "RECENT_ALLIES_CACHE_UPDATE" }) do
+        pcall(self.RegisterEvent, self, event, OnAlliesEvent)
+    end
+
+    -- When those statuses were last fetched, for the age beside the Refresh
+    -- button: at login (or a /reload), and whenever the game's Recent Allies
+    -- list asks. Hooking that call is allowed even though calling it isn't,
+    -- and the hook runs after Blizzard's own call without tainting it. Not
+    -- timed off RECENT_ALLIES_CACHE_UPDATE, which may fire for a newly
+    -- logged interaction without the statuses being fetched again.
+    local okReady, ready = pcall(function() return C_RecentAllies.IsRecentAllyDataReady() end)
+    if okReady and ready then self.alliesAsOf = time() end
+    pcall(hooksecurefunc, C_RecentAllies, "TryRequestRecentAlliesData", function()
+        -- The age ticker shows it within a second; the list only redraws if
+        -- someone's status changes.
+        self.alliesAsOf = time()
+    end)
+
+    -- See DetachRecentAlliesButton.
+    self:RegisterEvent("PLAYER_REGEN_DISABLED", function() self:DetachRecentAlliesButton() end)
+    self:RegisterEvent("PLAYER_REGEN_ENABLED", function() self:AttachRecentAlliesButton() end)
+end
+
+-- The Refresh button (online status row). Addons can't fetch fresh Recent Allies
+-- statuses, and can't open that list for you either: the list asks for
+-- statuses as it opens, and when addon code opened it the game counts that
+-- request as the addon's and forbids it. A secure button gets around this:
+-- the game itself clicks its Social button and then the Recent Allies tab,
+-- as if you had. Written for the newer Social window, which Forever uses;
+-- elsewhere the journal keeps a plain button that says to open it yourself.
+local RA_CLICKER = "AlliesJournalRecentAlliesTab"
+
+-- How old the online statuses can get before their age on the Recent Allies
+-- line turns yellow, then red (seconds). Red is the cue to click Refresh: by
+-- then people who logged off may well still show as online.
+local STATUS_FRESH, STATUS_STALE = 120, 600
+
+local function SocialWindowSupported()
+    local ok, enabled = pcall(function() return SocialUIControl.IsEnabled() end)
+    return ok and enabled and SocialUIFrame and SocialUITabType and SocialUITabType.RecentAllies
+        and type(SocialUIFrame.RefreshTabs) == "function"
+        and type(SocialUIFrame.EnumerateTabs) == "function"
+        and type(SocialUIFrame.GetSelectedTab) == "function"
+        and QuickJoinToastButton and true or false
+end
+
+-- The Social window builds its tab buttons again each time it opens, from a
+-- shared pool, so the Recent Allies tab can be a different button each time.
+local function FindRecentAlliesTab()
+    if not SocialUIFrame:IsShown() then return nil end
+    for tab in SocialUIFrame:EnumerateTabs() do
+        if tab.tabData and tab.tabData.tabType == SocialUITabType.RecentAllies then return tab end
+    end
+    return nil
+end
+
+-- Points the hidden clicker at the current Recent Allies tab, or at nothing
+-- while the Social window is closed (its tab buttons are reset then).
+function Browser:AimRecentAlliesClicker()
+    if not self.raClicker or InCombatLockdown() then return end
+    local tab = FindRecentAlliesTab()
+    self.raClicker:SetAttribute("clickbutton", tab)
+end
+
+-- Made once, the first time the journal is built out of combat on a client
+-- with the newer Social window.
+function Browser:SetUpRecentAlliesOpener()
+    if self.raButton then return true end
+    if InCombatLockdown() or not SocialWindowSupported() then return false end
+
+    -- Hidden; clicked by the button's macro once the Social window is open.
+    local clicker = CreateFrame("Button", RA_CLICKER, UIParent, "SecureActionButtonTemplate")
+    clicker:Hide()
+    clicker:SetAttribute("type", "click")
+    -- /click sends a key-up click: act on it whatever ActionButtonUseKeyDown is.
+    clicker:SetAttribute("useOnKeyDown", false)
+    self.raClicker = clicker
+    -- Aims the clicker whenever the tabs are rebuilt (each time the window
+    -- opens). hooksecurefunc runs after Blizzard's own function without
+    -- tainting it, so the tab click that follows is still the game's.
+    hooksecurefunc(SocialUIFrame, "RefreshTabs", function() self:AimRecentAlliesClicker() end)
+
+    local btn = CreateFrame("Button", "AlliesJournalRecentAlliesButton", UIParent,
+        "UIPanelButtonTemplate, SecureActionButtonTemplate")
+    btn:Hide()
+    btn:RegisterForClicks("AnyUp")
+    btn:SetAttribute("useOnKeyDown", false)
+    btn:SetAttribute("type", "macro")
+    btn:SetText("Refresh")
+    -- Runs just before the secure click, as its own step, so it doesn't
+    -- taint it. Picks what the click does from the Social window's state:
+    -- open on another tab, just switch to Recent Allies. Closed, open it,
+    -- then switch. Already on Recent Allies, step to another tab first, so
+    -- coming back asks for fresh statuses (the Social button would close the
+    -- window if it were already on that button's tab, so it's skipped then).
+    btn:SetScript("PreClick", function(b)
+        if InCombatLockdown() then return end
+        self:AimRecentAlliesClicker()
+        local onOtherTab = SocialUIFrame:IsShown()
+            and SocialUIFrame:GetSelectedTab() ~= SocialUITabType.RecentAllies
+        b:SetAttribute("macrotext", onOtherTab and ("/click " .. RA_CLICKER)
+            or ("/click QuickJoinToastButton\n/click " .. RA_CLICKER))
+    end)
+    btn:SetScript("OnEnter", function(b)
+        GameTooltip:SetOwner(b, "ANCHOR_TOP")
+        GameTooltip:SetText("Refresh Recent Allies", 1, 1, 1)
+        GameTooltip:AddLine("Opens the game's Recent Allies list, in the Social window. Only that updates who's online in Recent Allies (addons aren't allowed to ask), and until then it can show someone online long after they've logged off. The journal picks up the new statuses a moment later.", nil, nil, nil, true)
+        GameTooltip:AddLine(" ")
+        GameTooltip:AddLine("\"Recent Allies status\" on the left says how long ago that last happened.", 0.8, 0.8, 0.8, true)
+        GameTooltip:AddLine(string.format("|cff1eff00Green|r under %d min, |cffffff00yellow|r up to %d min, |cffff5050red|r and pulsing after that (time to refresh).",
+            STATUS_FRESH / 60, STATUS_STALE / 60), 0.8, 0.8, 0.8, true)
+        GameTooltip:Show()
+    end)
+    btn:SetScript("OnLeave", function() GameTooltip:Hide() end)
+    self.raButton = btn
+    return true
+end
+
+-- Lays the secure button over the journal's placeholder.
+function Browser:AttachRecentAlliesButton()
+    local holder = self.raHolder
+    if not holder or InCombatLockdown() or not self:SetUpRecentAlliesOpener() then return end
+    local btn = self.raButton
+    btn:SetParent(holder.frame)
+    btn:ClearAllPoints()
+    btn:SetAllPoints(holder.frame)
+    btn:SetFrameStrata(holder.frame:GetFrameStrata())
+    btn:SetFrameLevel(holder.frame:GetFrameLevel() + 2)
+    btn:Show()
+end
+
+-- The text at the left of the Recent Allies line under the list: how old
+-- its online statuses are, as one line in one color by age (green, yellow,
+-- then red; also red when they haven't been loaded at all). Also says
+-- whether it's red, which makes it pulse (see SetStatusPulse). Kept short
+-- so it fits beside the two buttons at the default window width.
+local function StatusAgeText(asOf)
+    local age, seconds
+    if not asOf then
+        age = "not loaded"
+    else
+        seconds = math.max(0, time() - asOf)
+        if seconds < 1 then
+            age = "just updated"
+        elseif seconds < 60 then
+            age = seconds .. " sec old"
+        elseif seconds < 3600 then
+            age = math.floor(seconds / 60) .. " min old"
+        else
+            age = math.floor(seconds / 3600) .. " hr old"
+        end
+    end
+    local stale = not seconds or seconds >= STATUS_STALE
+    local color = stale and "ff5050" or seconds < STATUS_FRESH and "1eff00" or "ffff00"
+    return "|cff" .. color .. "Recent Allies status: " .. age .. "|r", stale
+end
+
+-- Fades a label in and out, or stops it (Stop puts the alpha back). The
+-- animation is made once on the label's frame; AceGUI reuses frames, so the
+-- age label stops it when it's released.
+local function SetStatusPulse(label, on)
+    local f = label.frame
+    local pulse = f.ajPulse
+    if on then
+        if not pulse then
+            pulse = f:CreateAnimationGroup()
+            pulse:SetLooping("BOUNCE")
+            local fade = pulse:CreateAnimation("Alpha")
+            fade:SetFromAlpha(1)
+            fade:SetToAlpha(0.25)
+            fade:SetDuration(0.7)
+            fade:SetSmoothing("IN_OUT")
+            f.ajPulse = pulse
+        end
+        if not pulse:IsPlaying() then pulse:Play() end
+    elseif pulse and pulse:IsPlaying() then
+        pulse:Stop()
+    end
+end
+
+-- Lays out the Recent Allies line: the text on the left, in whatever width
+-- the buttons leave, and the buttons against the right edge, everything
+-- centered on the row. Flow can't do this: it puts the buttons wherever the
+-- text ends, and wraps them onto a row of their own when it's long. Redone
+-- when the window is resized, so the buttons stay at the edge.
+AceGUI:RegisterLayout("AlliesJournalStatusLine", function(content, children)
+    local width = content.width or content:GetWidth() or 0
+    local buttonsWidth, rowHeight = 0, 0
+    for i = 2, #children do
+        local f = children[i].frame
+        buttonsWidth = buttonsWidth + (f.width or f:GetWidth() or 0)
+        rowHeight = math.max(rowHeight, f.height or f:GetHeight() or 0)
+    end
+    local text = children[1]
+    if text then
+        text:SetWidth(math.max(width - buttonsWidth - 8, 40))
+        rowHeight = math.max(rowHeight, text.frame.height or text.frame:GetHeight() or 0)
+        text.frame:ClearAllPoints()
+        text.frame:SetPoint("LEFT", content, "TOPLEFT", 4, -rowHeight / 2)
+        text.frame:Show()
+    end
+    local right = 0
+    for i = #children, 2, -1 do
+        local f = children[i].frame
+        f:ClearAllPoints()
+        f:SetPoint("RIGHT", content, "TOPRIGHT", -right, -rowHeight / 2)
+        f:Show()
+        right = right + (f.width or f:GetWidth() or 0)
+    end
+    content.obj:LayoutFinished(nil, rowHeight)
+end)
+
+-- Keeps the age on the Recent Allies line current while the journal is
+-- open; the window only rebuilds when something changes. Stops once the
+-- window is closed.
+function Browser:StartAgeTicker()
+    if self.ageTicker then return end
+    self.ageTicker = C_Timer.NewTicker(1, function()
+        if not (self.frame and self.frame:IsShown()) then
+            self.ageTicker:Cancel()
+            self.ageTicker = nil
+            return
+        end
+        self:UpdateStatusAge()
+    end)
+end
+
+function Browser:UpdateStatusAge()
+    local label = self.statusAge
+    -- AceGUI clears user data when a widget is released, so a label from a
+    -- window that has since been rebuilt (and maybe reused elsewhere) fails
+    -- this check.
+    if not (label and label:GetUserData("statusAge")) then return end
+    local text, stale = StatusAgeText(self.alliesAsOf)
+    if text == label:GetUserData("text") then return end
+    label:SetUserData("text", text)
+    label:SetText(text)
+    SetStatusPulse(label, stale)
+end
+
+-- Takes the secure button off the journal. Needed before combat: a window
+-- holding a secure button can't be closed, moved or rebuilt in combat.
+-- PLAYER_REGEN_DISABLED comes just before the combat lockdown starts, so
+-- this still works there. Also when the placeholder is released, so the
+-- button doesn't ride along on a recycled AceGUI frame.
+function Browser:DetachRecentAlliesButton()
+    local btn = self.raButton
+    if not btn or InCombatLockdown() then return end
+    btn:Hide()
+    btn:ClearAllPoints()
+    btn:SetParent(UIParent)
 end
 
 function Browser:Toggle()
@@ -691,7 +928,7 @@ end
 function Browser:RefreshIfShown()
     if self.frame and self.frame:IsShown() then
         self:RefreshList()
-        self:RefreshStats()
+        self:UpdateTitle()
     end
 end
 
@@ -756,6 +993,11 @@ function Browser:Show()
     self.frame:Show()
     self.frame.frame:Raise()
     self:Refresh()
+
+    -- Statuses aren't compared while the list is closed (see OnEnable), so
+    -- the first change after opening always redraws.
+    self.lastStatuses = nil
+    self:StartAgeTicker()
 end
 
 -- Sets the window to the size saved in settings (from /pr options).
@@ -767,10 +1009,13 @@ function Browser:ApplyWindowSize()
 end
 
 -- Heights for the list and (when a player is selected) the detail area,
--- from the window's current height. 190 is everything else in the window
--- (title, stats, buttons, filters, margins).
+-- from the window's current height. 180 is everything else: the stock
+-- window chrome (45; addon.windowExtra is what ours adds to it), the rows
+-- around the list (120: filters 44, the Recent Allies line 24, the divider
+-- 10, the Runs row 27, plus Flow's 3px after each row and after the list),
+-- and about 15px to spare below the bottom buttons.
 function Browser:AreaHeights(hasSelection)
-    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 201 - addon.windowExtra, 200)
+    local content = math.max(math.floor(self.frame.frame:GetHeight() + 0.5) - 180 - addon.windowExtra, 200)
     if not hasSelection then return content, 0 end
     local list = math.floor(content * 0.40)
     return list, content - list
@@ -786,112 +1031,14 @@ end
 function Browser:Refresh()
     local frame = self.frame
     frame:ReleaseChildren()
+    self:UpdateTitle()
 
-    -- Per-category size breakdown, visible every time the browser is
-    -- open (not just on request via /pr stats) - the user's biggest
-    -- stated concern is storage growth, and this is meant to make it
-    -- obvious at a glance which category (chat/meter/sessions/reviews)
-    -- is actually driving it.
-    local stats = AceGUI:Create("Label")
-    stats:SetFullWidth(true)
-    frame:AddChild(stats)
-    self.statsLabel = stats
-    -- Set the real (two-line) text BEFORE any sibling below it gets
-    -- added - Flow layout positions each new child using the CURRENT
-    -- height of everything already added, so setting this after
-    -- search/role were already placed (as RefreshStats used to be
-    -- called, at the very end of this function) left them stacked at
-    -- the offset an empty single-line stats label implied, with the
-    -- real two-line text then drawing over them. Same class of bug
-    -- already fixed twice in ReviewPrompt's chart section.
-    self:RefreshStats()
-
-    local buttonRow = AceGUI:Create("SimpleGroup")
-    buttonRow:SetFullWidth(true)
-    buttonRow:SetLayout("Flow")
-    frame:AddChild(buttonRow)
-
-    local cleanupBtn = AceGUI:Create("Button")
-    cleanupBtn:SetText("Clean Up...")
-    cleanupBtn:SetWidth(120)
-    cleanupBtn:SetCallback("OnClick", function() self:ShowCleanupConfirm() end)
-    buttonRow:AddChild(cleanupBtn)
-
-    local refreshBtn = AceGUI:Create("Button")
-    refreshBtn:SetText("Refresh")
-    refreshBtn:SetWidth(100)
-    refreshBtn:SetCallback("OnClick", function()
-        -- TryRequestRecentAlliesData is a protected call (HasRestrictions,
-        -- not AllowedWhenUntainted - confirmed via an ADDON_ACTION_FORBIDDEN
-        -- error even inside pcall, which doesn't catch a taint violation
-        -- the way it catches a normal Lua error) - not called here.
-        -- GetRecentAllies() alone is enough: /pr recentallies already
-        -- showed IsRecentAllyDataReady is true without ever requesting it,
-        -- so this button just re-reads whatever's already cached.
-        self:RefreshList()
-        self:RefreshStats(true)
-    end)
-    buttonRow:AddChild(refreshBtn)
-
-    local pinBtn = AceGUI:Create("Button")
-    pinBtn:SetText("Pin Journal")
-    pinBtn:SetWidth(120)
-    pinBtn:SetCallback("OnClick", function()
-        addon:PinReviewedAllies()
-        -- Pins that stick immediately flip the status icons right away;
-        -- retried ones show up on the next Refresh.
-        self:RefreshList()
-    end)
-    buttonRow:AddChild(pinBtn)
-
-    local nearbyBtn = AceGUI:Create("Button")
-    nearbyBtn:SetText("Nearby")
-    nearbyBtn:SetWidth(100)
-    nearbyBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowNearby() end)
-    buttonRow:AddChild(nearbyBtn)
-
-    local whoBtn = AceGUI:Create("Button")
-    do
-        local text, disabled = addon:GetModule("WhoCheck"):ButtonState()
-        whoBtn:SetText(text)
-        whoBtn:SetDisabled(disabled)
-    end
-    whoBtn:SetWidth(260)
-    self.whoBtn = whoBtn
-    whoBtn:SetCallback("OnClick", function() self:CheckOfflineStatus() end)
-    whoBtn:SetCallback("OnEnter", function(widget)
-        GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
-        GameTooltip:SetText("Check players not in Recent Allies", 1, 1, 1)
-        GameTooltip:AddLine("Players marked [NR] aren't in Blizzard's Recent Allies, so their online status is unknown. This runs /who on the ones you have a note on to see whether they are online, plus their level, class and location. The game only allows one /who per click, so click once per player (at least 5 seconds apart).", nil, nil, nil, true)
-        local progress = addon:GetModule("WhoCheck"):ProgressLines()
-        if progress then
-            GameTooltip:AddLine(" ")
-            for _, line in ipairs(progress) do GameTooltip:AddLine(line) end
-        end
-        GameTooltip:Show()
-    end)
-    whoBtn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
-    -- A second row for the two views of your history that sit beside the list.
-    local viewRow = AceGUI:Create("SimpleGroup")
-    viewRow:SetFullWidth(true)
-    viewRow:SetLayout("Flow")
-    frame:AddChild(viewRow)
-
-    local runsBtn = AceGUI:Create("Button")
-    runsBtn:SetText("Runs")
-    runsBtn:SetWidth(120)
-    runsBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowRuns() end)
-    viewRow:AddChild(runsBtn)
-
-    local numbersBtn = AceGUI:Create("Button")
-    numbersBtn:SetText("In numbers")
-    numbersBtn:SetWidth(120)
-    numbersBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowNumbers() end)
-    viewRow:AddChild(numbersBtn)
-    -- The /who check lives here, where its longer label (name, count and
-    -- countdown) has room.
-    viewRow:AddChild(whoBtn)
-
+    -- Top to bottom: search and filters (what you use each time), the list
+    -- and the selected player's details, a line about the list's online
+    -- statuses, and buttons for the journal's other windows along the bottom
+    -- edge, like the Friends window's. Nearby is /aj nearby only, Pin
+    -- Journal /aj pinjournal, and the storage sizes and Clean Up are in
+    -- /aj options. AreaHeights has the height of everything but the list.
     local search = AceGUI:Create("EditBox")
     search:SetLabel("Search")
     search:SetText(self.searchText)
@@ -986,6 +1133,95 @@ function Browser:Refresh()
         self.detailContainer = nil
     end
 
+    -- The Recent Allies line, for the online dots in the list: how long ago
+    -- they were last checked (kept current by the age ticker, see
+    -- StartAgeTicker), the button that refreshes them, and the /who check
+    -- for people Recent Allies doesn't cover. Laid out by
+    -- AlliesJournalStatusLine: text left, buttons at the right edge.
+    local statusLine = AceGUI:Create("SimpleGroup")
+    statusLine:SetFullWidth(true)
+    statusLine:SetLayout("AlliesJournalStatusLine")
+    frame:AddChild(statusLine)
+
+    local statusAge = AceGUI:Create("Label")
+    local ageText, stale = StatusAgeText(self.alliesAsOf)
+    statusAge:SetText(ageText)
+    statusAge:SetUserData("statusAge", true)
+    statusAge:SetUserData("text", ageText)
+    statusAge:SetCallback("OnRelease", function(widget) SetStatusPulse(widget, false) end)
+    SetStatusPulse(statusAge, stale)
+    self.statusAge = statusAge
+    statusLine:AddChild(statusAge)
+
+    -- Opens the game's Recent Allies list, the only thing that updates its
+    -- statuses. The button that does it is a secure one laid over this
+    -- placeholder (see SetUpRecentAlliesOpener); a click only reaches the
+    -- placeholder in combat, or where that secure button couldn't be set up.
+    local raHolder = AceGUI:Create("Button")
+    raHolder:SetText("Refresh")
+    raHolder:SetWidth(80)
+    raHolder:SetCallback("OnClick", function()
+        addon:Print(InCombatLockdown()
+            and "Refreshing Recent Allies doesn't work in combat. Open the Social window and pick Recent Allies there."
+            or "Refreshing Recent Allies can't open the Social window on this client. Open it and pick Recent Allies there.")
+    end)
+    raHolder:SetCallback("OnRelease", function(widget)
+        if self.raHolder == widget then self.raHolder = nil end
+        self:DetachRecentAlliesButton()
+    end)
+    statusLine:AddChild(raHolder)
+    self.raHolder = raHolder
+    self:AttachRecentAlliesButton()
+
+    local whoBtn = AceGUI:Create("Button")
+    do
+        local text, disabled = addon:GetModule("WhoCheck"):ButtonState()
+        whoBtn:SetText(text)
+        whoBtn:SetDisabled(disabled)
+    end
+    -- 230 leaves the status text room for one line at the default width,
+    -- and still fits "Wait 5s - Name (3/12)".
+    whoBtn:SetWidth(230)
+    self.whoBtn = whoBtn
+    whoBtn:SetCallback("OnClick", function() self:CheckOfflineStatus() end)
+    whoBtn:SetCallback("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget.frame, "ANCHOR_TOP")
+        GameTooltip:SetText("Check players not in Recent Allies", 1, 1, 1)
+        GameTooltip:AddLine("Players marked [NR] aren't in Blizzard's Recent Allies, so their online status is unknown. This runs /who on the ones you have a note on to see whether they are online, plus their level, class and location. The game only allows one /who per click, so click once per player (at least 5 seconds apart).", nil, nil, nil, true)
+        local progress = addon:GetModule("WhoCheck"):ProgressLines()
+        if progress then
+            GameTooltip:AddLine(" ")
+            for _, line in ipairs(progress) do GameTooltip:AddLine(line) end
+        end
+        GameTooltip:Show()
+    end)
+    whoBtn:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+    statusLine:AddChild(whoBtn)
+
+    -- A thin rule between the list's controls and the bottom buttons, which
+    -- open other windows.
+    local divider = AceGUI:Create("Heading")
+    divider:SetFullWidth(true)
+    divider:SetHeight(10)
+    frame:AddChild(divider)
+
+    local navRow = AceGUI:Create("SimpleGroup")
+    navRow:SetFullWidth(true)
+    navRow:SetLayout("Flow")
+    frame:AddChild(navRow)
+
+    local runsBtn = AceGUI:Create("Button")
+    runsBtn:SetText("Runs")
+    runsBtn:SetWidth(120)
+    runsBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowRuns() end)
+    navRow:AddChild(runsBtn)
+
+    local numbersBtn = AceGUI:Create("Button")
+    numbersBtn:SetText("In numbers")
+    numbersBtn:SetWidth(120)
+    numbersBtn:SetCallback("OnClick", function() addon:GetModule("Diary"):ShowNumbers() end)
+    navRow:AddChild(numbersBtn)
+
     self:RefreshList()
     if hasSelection then
         self:ShowHistory(self.selectedNameRealm)
@@ -999,40 +1235,12 @@ function Browser:ClearSelection()
     self:Refresh()
 end
 
--- The header's sizes are worked out at most every STATS_MAX_AGE seconds
--- (see GetStorageStats): this runs after every saved note and every friend
--- status change while the journal is open. force = right now, for the
--- Refresh button and after deleting or cleaning up.
-local STATS_MAX_AGE = 300
-function Browser:RefreshStats(force)
-    if not self.statsLabel then return end
-    local s = addon:GetStorageStats(not force and STATS_MAX_AGE or nil)
-    -- No "Chat" size while chat isn't being kept and none is stored.
-    local chatPart = ""
-    if addon:TracksChat() or (s.chatBytes or 0) > 0 then
-        chatPart = "Chat " .. addon:FormatBytes(s.chatBytes) .. "  ·  "
-    end
-    self.statsLabel:SetText(string.format(
-        "%d player(s) | %d session(s) | %d notes" .. (addon.db.global.settings.paused and "  |cffff9933recording paused|r" or "") .. "\n%sSessions %s  ·  Notes %s  ·  Players %s  ·  Total %s",
-        s.playerCount, s.sessionCount, s.reviewCount,
-        chatPart, addon:FormatBytes(s.sessionsBytes),
-        addon:FormatBytes(s.reviewsBytes), addon:FormatBytes(s.playersBytes), addon:FormatBytes(s.totalBytes)))
-end
-
-function Browser:ShowCleanupConfirm()
-    local days = addon.db.global.settings.retention.purgeDays
-    local eligible, bytesFreed = addon:PreviewSessionCleanup(days)
-
-    if #eligible == 0 then
-        addon:Print(string.format("Nothing eligible for cleanup right now (sessions older than %d days, players without notes only).", days))
-        return
-    end
-
-    local message = string.format(
-        "Remove %d old session(s) from players without notes (older than %d days)?\nFrees about %s.\nSessions for players with notes are never included.",
-        #eligible, days, addon:FormatBytes(bytesFreed))
-
-    StaticPopup_Show("ALLIESJOURNAL_CLEANUP_SESSIONS", message, nil, { eligible = eligible })
+-- "Recording paused" goes in the window title, so it's seen at a glance
+-- (Pause recording is in /aj options, or /aj pause).
+function Browser:UpdateTitle()
+    if not self.frame then return end
+    self.frame:SetTitle(addon.db.global.settings.paused
+        and "Allies Journal  |cffff9933(recording paused)|r" or "Allies Journal")
 end
 
 -- /who every listed player with a note that Recent Allies has no entry for.

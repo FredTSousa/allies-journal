@@ -99,8 +99,8 @@ function AlliesJournal:OnInitialize()
         sg.minCombatSeconds = sg.minCombatSeconds or 120    -- 2 min
     end
     -- Retention: how old (in days) an unreviewed player's session needs to
-    -- be before /pr's Clean Up flow will suggest removing it. Never
-    -- applied automatically - see Browser's Clean Up button.
+    -- be before Clean Up will suggest removing it. Never applied
+    -- automatically - see the Clean Up button in /aj options (Storage).
     g.settings.retention = g.settings.retention or {}
     g.settings.retention.purgeDays = g.settings.retention.purgeDays or 60
     -- Toggleable, per user request - a chat recap ("grouped 6m, 3m
@@ -493,6 +493,8 @@ function AlliesJournal:SlashCommand(input)
         settings.paused = not settings.paused
         self:Print(settings.paused and "Recording paused: no new sessions or automatic note windows. /aj pause again to resume." or "Recording resumed.")
     elseif cmd == "backup" then
+        -- The journal's title says when recording is paused.
+        self:GetModule("Browser"):UpdateTitle()
         local entry = self:GetModule("Backup"):Snapshot("manual")
         self:Print("Backed up your journal: " .. self:GetModule("Backup"):Describe(entry) .. ". Restore from /aj options.")
     elseif cmd == "chatstar" then

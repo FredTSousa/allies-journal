@@ -372,7 +372,7 @@ local function BuildDisplay(scroll)
 
     Section(scroll, "Recent Allies", function(group)
         AddCheckbox(group, "Also pin players I marked 'Not for me' or 'Struggled'",
-            "Players with notes are pinned in Blizzard's Recent Allies list with a short note. By default a player you marked 'Not for me' (Social) or 'Struggled' (Performance) is left out. This applies everywhere a pin is made: saving a note, regrouping, Pin Journal, and resyncing. It doesn't remove pins that already exist.",
+            "Players with notes are pinned in Blizzard's Recent Allies list with a short note. By default a player you marked 'Not for me' (Social) or 'Struggled' (Performance) is left out. This applies everywhere a pin is made: saving a note, regrouping, /aj pinjournal, and resyncing. It doesn't remove pins that already exist.",
             function() return settings.recentAllies.pinBad end,
             function(v) settings.recentAllies.pinBad = v end)
     end)
@@ -628,6 +628,22 @@ local function BuildTooltips(scroll)
         addon.DEFAULT_LFG_TOOLTIP_TEMPLATE)
 end
 
+-- Clean Up (Storage section): says how many sessions and how much space,
+-- and asks before deleting. The text goes in pre-formatted as arg1, since
+-- Blizzard caps the dialog's own %s substitution at two args.
+local function ShowCleanupConfirm()
+    local days = addon.db.global.settings.retention.purgeDays
+    local eligible, bytesFreed = addon:PreviewSessionCleanup(days)
+    if #eligible == 0 then
+        addon:Print(string.format("Nothing to clean up right now (sessions older than %d days, players without notes only).", days))
+        return
+    end
+    local message = string.format(
+        "Delete %d session(s) older than %d days, from players you never wrote a note for?\nFrees about %s. Those players stay in your journal with their totals.\n\nThis can't be undone. Backups made before now still contain the sessions.",
+        #eligible, days, addon:FormatBytes(bytesFreed))
+    StaticPopup_Show("ALLIESJOURNAL_CLEANUP_SESSIONS", message, nil, { eligible = eligible })
+end
+
 -- Data & privacy: what is recorded and kept, and how to get rid of it.
 local function BuildData(scroll)
     local settings = addon.db.global.settings
@@ -650,9 +666,9 @@ local function BuildData(scroll)
         local tracking = settings.tracking
         local function TrackingChanged()
             addon:GetModule("ChatLog"):ApplySetting()
-            local browser = addon:GetModule("Browser")
-            browser:RefreshIfShown()
-            browser:RefreshStats()
+            addon:GetModule("Browser"):RefreshIfShown()
+            -- Storage (below) shows a Chat size only while chat is kept.
+            Rebuild()
         end
         AddCheckbox(group, "Record damage and healing numbers",
             "The DPS and HPS of everyone in your group, read from the game's damage meter after each fight. With this off, the note window has no group chart or fight list, and the Damage and Healing lines are hidden in your journal. Time grouped and time in combat are still recorded.",
@@ -663,7 +679,7 @@ local function BuildData(scroll)
             function() return tracking.chat end,
             function(v) tracking.chat = v; TrackingChanged() end)
         AddCheckbox(group, "Remember friendly players I pass in the open world",
-            "Off by default. Kept for 7 days, so you can add someone to your journal a few days after you met. See the Nearby button in the journal or /aj nearby.",
+            "Off by default. Kept for 7 days, so you can add someone to your journal a few days after you met. Open it with /aj nearby.",
             function() return settings.nearby.enabled end,
             function(v) settings.nearby.enabled = v end)
         AddNote(group, "Turning numbers or chat off hides what is already saved without deleting it, so turning it back on brings it back. A note window that is already open changes the next time it opens. To remove it for good, see Delete and reset at the bottom of this tab.")
@@ -679,11 +695,29 @@ local function BuildData(scroll)
         AddNote(group, "A session (grouped time, combat time, and DPS/HPS when those are recorded) is saved only when BOTH minimums are met. This keeps out non-combat grouping and trivial world mob-tagging.")
     end)
 
-    Section(scroll, "Old sessions", function(group)
-        AddSlider(group, "Clean Up offers sessions older than (days)", 7, 180, 1,
+    Section(scroll, "Storage", function(group)
+        -- How big the journal is, by kind. Sizes are slow to work out on a
+        -- big journal, so they're reused for up to 5 minutes; anything that
+        -- deletes clears them (addon.storageSizes), so they're fresh then.
+        local s = addon:GetStorageStats(300)
+        local chatPart = ""
+        if addon:TracksChat() or (s.chatBytes or 0) > 0 then
+            chatPart = "Chat " .. addon:FormatBytes(s.chatBytes) .. "  ·  "
+        end
+        local summary = AceGUI:Create("Label")
+        summary:SetFullWidth(true)
+        summary:SetText(string.format(
+            "%d player(s)  ·  %d session(s)  ·  %d note(s)\n%sSessions %s  ·  Notes %s  ·  Players %s  ·  Total %s",
+            s.playerCount, s.sessionCount, s.reviewCount,
+            chatPart, addon:FormatBytes(s.sessionsBytes),
+            addon:FormatBytes(s.reviewsBytes), addon:FormatBytes(s.playersBytes), addon:FormatBytes(s.totalBytes)))
+        group:AddChild(summary)
+
+        AddSlider(group, "Clean Up deletes sessions older than (days)", 7, 180, 1,
             function() return retention.purgeDays end,
             function(v) retention.purgeDays = v end)
-        AddNote(group, "The Clean Up button in /aj offers to delete sessions older than this, for players you never wrote a note for. It always asks first, and sessions for players with notes are never included.")
+        AddButton(group, "Clean Up...", 160, ShowCleanupConfirm)
+        AddNote(group, "Deletes sessions older than the days above, only for players you never wrote a note for. Those players stay in your journal, and their totals (time together, dungeons, bosses) are kept: only the session-by-session details go. It says how many and asks first. It can't be undone, but restoring a backup made before it brings them back.")
     end)
 
     Section(scroll, "Backup", function(group)
@@ -824,6 +858,29 @@ function Options:ResetAll()
     self:Show()  -- rebuild so every control reflects the reset values
 end
 
+-- After something is deleted: the storage sizes are worked out again, and
+-- an open options window shows them.
+local function AfterDelete()
+    addon.storageSizes = nil
+    if Options.frame and Options.frame:IsShown() then Rebuild() end
+end
+
+StaticPopupDialogs["ALLIESJOURNAL_CLEANUP_SESSIONS"] = {
+    text = "%s",
+    button1 = "Delete",
+    button2 = CANCEL,
+    OnAccept = function(_, data)
+        local removed = addon:ApplySessionCleanup(data.eligible)
+        addon:Print(string.format("Cleaned up %d old session(s).", removed))
+        addon:GetModule("Browser"):RefreshIfShown()
+        AfterDelete()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
 StaticPopupDialogs["ALLIESJOURNAL_DELETE_NUMBERS"] = {
     text = "Delete the damage and healing numbers from all your notes and sessions?\n\nThis can't be undone. The notes and sessions themselves are kept. Backups made before now still contain the numbers.",
     button1 = "Delete",
@@ -831,6 +888,7 @@ StaticPopupDialogs["ALLIESJOURNAL_DELETE_NUMBERS"] = {
     OnAccept = function()
         local count = addon:DeleteSavedNumbers()
         addon:Print(string.format("Deleted the damage and healing numbers from %d note%s and session%s.", count, count == 1 and "" or "s", count == 1 and "" or "s"))
+        AfterDelete()
     end,
     timeout = 0,
     whileDead = true,
@@ -845,6 +903,7 @@ StaticPopupDialogs["ALLIESJOURNAL_DELETE_CHAT"] = {
     OnAccept = function()
         local count = addon:DeleteSavedChat()
         addon:Print(string.format("Deleted the chat saved with %d note%s.", count, count == 1 and "" or "s"))
+        AfterDelete()
     end,
     timeout = 0,
     whileDead = true,

@@ -1038,9 +1038,9 @@ function addon:DeleteSavedChat()
     for _, snap in pairs(self:GetModule("RosterTracker").recentDepartures) do
         snap.chat = {}
     end
-    local browser = self:GetModule("Browser")
-    browser:RefreshIfShown()
-    browser:RefreshStats(true)
+    self:GetModule("Browser"):RefreshIfShown()
+    -- The storage sizes in /aj options are worked out again next time.
+    self.storageSizes = nil
     return count
 end
 
@@ -1483,8 +1483,8 @@ function addon:EstimateSize(value)
 end
 
 -- Shared "N bytes" -> "N.N KB" formatter, used everywhere GetStorageStats/
--- PreviewSessionCleanup results get displayed (the /pr stats command,
--- Browser's header, the Clean Up confirmation).
+-- PreviewSessionCleanup results get displayed (the /aj stats command, and
+-- the Storage section and Clean Up confirmation in /aj options).
 function addon:FormatBytes(n)
     n = n or 0
     if n < 1024 then return n .. "B" end
