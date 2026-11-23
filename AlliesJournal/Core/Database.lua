@@ -81,6 +81,59 @@ local function GenerateReviewID()
     return string.format("%d-%05d", time(), math.random(0, 99999))
 end
 
+-- The ruleset name AceDB-3.0 uses in place of a realm on clients where
+-- character names are unique across the whole region (Forever), or nil.
+local function RulesetRealm()
+    local ok, label = pcall(function()
+        if not (RegionalUniqueNamesEnabled and RegionalUniqueNamesEnabled()) then return nil end
+        local rules = Enum.GameRule
+        local function Active(rule) return rule ~= nil and C_GameRules.IsGameRuleActive(rule) end
+        if Active(rules.HardcoreRuleset) then return "Hardcore" end
+        if Active(rules.RPRuleset) then return "RP" end
+        if Active(rules.PvPRuleset) then return "PvP" end
+        return "PvE"
+    end)
+    return ok and label or nil
+end
+
+-- The realm most of the journal's players are saved under, or nil.
+local function MostSavedRealm(players)
+    local counts, best = {}, nil
+    for nameRealm in pairs(players or {}) do
+        local realm = type(nameRealm) == "string" and nameRealm:match("%-(.+)$")
+        if realm then
+            counts[realm] = (counts[realm] or 0) + 1
+            if not best or counts[realm] > counts[best] then best = realm end
+        end
+    end
+    return best
+end
+
+-- The realm part of every "Name-Realm" the journal saves. Since a client
+-- update on 2026-11-21, GetRealmName() returns "" on Forever (its character
+-- names are unique across the region, so it has no realm names), and the
+-- journal saved everyone met from then on as "Name-": a second entry for
+-- anyone already in it. So the last realm name the game did report is kept
+-- (g.realmName) and used while it reports none. A journal that never kept
+-- one takes the realm most of its players are saved under, and failing
+-- that the ruleset name, as AceDB-3.0 does ("PvE").
+function addon:GetMyRealm()
+    local realm = GetRealmName()
+    local g = self.db and self.db.global
+    if type(realm) == "string" and realm ~= "" then
+        if g then g.realmName = realm end
+        return realm
+    end
+    if not g then return RulesetRealm() or "" end
+    if type(g.realmName) ~= "string" or g.realmName == "" then
+        -- Looked for once a session: this runs on every tooltip and nameplate.
+        if self.noRealmFound then return "" end
+        g.realmName = MostSavedRealm(g.players) or RulesetRealm()
+        if not g.realmName then self.noRealmFound = true; return "" end
+    end
+    return g.realmName
+end
+
 -- "Name-Realm" for any unit token. On this client's classless character
 -- system, UnitName(unit) behaves inconsistently between "player" and any
 -- other unit: for "player" it returns the full two-part name ("First
@@ -89,10 +142,11 @@ end
 -- values instead ("First", "Last") and the real realm is never returned
 -- at all - confirmed by reviews saving as "First-Last" (no realm) via
 -- target instead of "First Last-Realm" like chat-based capture produces.
--- Since a genuine realm name should equal GetRealmName() for anyone
--- groupable with you, treat any second value that DOESN'T match your own
--- realm as part of the display name (the surname) rather than a realm,
--- and always supply the real realm ourselves.
+-- Since a genuine realm name should equal your own for anyone groupable
+-- with you, treat any second value that DOESN'T match your own realm as
+-- part of the display name (the surname) rather than a realm, and always
+-- supply your realm ourselves (GetMyRealm, which has a stand-in while
+-- Forever reports no realm name).
 --
 -- Both values can be "secret" on this client. They can't be compared here
 -- or used as a table key by any caller, so a hidden name counts as no name.
@@ -101,7 +155,7 @@ function addon:GetFullName(unit)
     if not name then return nil end
     if issecretvalue and (issecretvalue(name) or issecretvalue(realm)) then return nil end
 
-    local myRealm = GetRealmName()
+    local myRealm = self:GetMyRealm()
     if realm and realm ~= "" and realm ~= myRealm then
         name = name .. " " .. realm
     end
@@ -122,11 +176,13 @@ function addon:GetPlayerName()
 end
 
 -- Same "Name-Realm" normalization as GetFullName, but for a plain name
--- string (as returned by CHAT_MSG_* events) rather than a unit token.
+-- string (as returned by CHAT_MSG_* events) rather than a unit token. A
+-- blank realm ("Name-") gets yours too.
 function addon:NormalizeChatSender(name)
     if not name or name == "" then return nil end
-    if not name:find("-", 1, true) then
-        name = name .. "-" .. GetRealmName()
+    local short, realm = name:match("^([^-]*)%-?(.*)$")
+    if short and short ~= "" and realm == "" then
+        name = short .. "-" .. self:GetMyRealm()
     end
     return name
 end
@@ -369,7 +425,7 @@ function addon:IsOnMyServerAndFaction(realmID, realmName, faction)
     if type(realmID) == "number" and realmID > 0 and type(myID) == "number" and myID > 0 then
         return realmID == myID
     end
-    return SameRealmName(realmName, GetRealmName())
+    return SameRealmName(realmName, self:GetMyRealm())
 end
 
 -- Every friend you could invite that the journal can put a character name
@@ -385,7 +441,7 @@ end
 function addon:GetFriendCharacters()
     local friends = {}
     pcall(function()
-        local myRealm = GetRealmName()
+        local myRealm = self:GetMyRealm()
         for i = 1, C_FriendList.GetNumFriends() do
             local info = C_FriendList.GetFriendInfoByIndex(i)
             local short = info and info.name and self:GetShortName(info.name)
@@ -1153,6 +1209,151 @@ function addon:ForgetPlayer(nameRealm)
     return true
 end
 
+-- Folds player record `from` into `into`, for one person saved under two
+-- names: notes, sessions, the Recent Allies log, trades, tags and the
+-- cleaned-up totals all end up on `into`. What they're like now (level,
+-- guild...) comes from whichever was seen last.
+local function MergePlayerRecords(into, from, g)
+    local fromNewer = ((from.lastSeen or {}).date or 0) > ((into.lastSeen or {}).date or 0)
+
+    for _, key in ipairs({ "reviews", "sessions" }) do
+        local list, have, store = into[key] or {}, {}, g[key]
+        into[key] = list
+        for _, id in ipairs(list) do have[id] = true end
+        for _, id in ipairs(from[key] or {}) do
+            if not have[id] then have[id] = true; table.insert(list, id) end
+        end
+        table.sort(list, function(a, b)
+            return ((store[a] and store[a].date) or 0) < ((store[b] and store[b].date) or 0)
+        end)
+    end
+
+    if from.allyLog then
+        local log, seen = into.allyLog or {}, {}
+        into.allyLog = log
+        for _, entry in ipairs(log) do seen[(entry.t or 0) .. ":" .. (entry.d or "")] = true end
+        for _, entry in ipairs(from.allyLog) do
+            local key = (entry.t or 0) .. ":" .. (entry.d or "")
+            if not seen[key] then seen[key] = true; table.insert(log, entry) end
+        end
+        -- Newest first, at most 60, as SnapshotRecentAllies keeps it.
+        table.sort(log, function(a, b) return (a.t or 0) > (b.t or 0) end)
+        while #log > 60 do table.remove(log) end
+    end
+
+    if fromNewer and from.lastSeen then into.lastSeen = from.lastSeen end
+    if from.met and (not into.met or (from.met.date or 0) < (into.met.date or 0)) then into.met = from.met end
+    for _, key in ipairs({ "level", "class", "race", "guild", "who" }) do
+        if from[key] ~= nil and fromNewer then into[key] = from[key] end
+    end
+    if from.friend then into.friend = true end
+    if from.favorite then into.favorite = true end
+    if from.tags then
+        into.tags = into.tags or {}
+        for tag, on in pairs(from.tags) do if on then into.tags[tag] = true end end
+    end
+    if from.trades then
+        local trades = into.trades or {}
+        into.trades = trades
+        trades.count = (trades.count or 0) + (from.trades.count or 0)
+        trades.last = math.max(trades.last or 0, from.trades.last or 0)
+    end
+    if from.archive then
+        local archive = into.archive or {}
+        into.archive = archive
+        for key, value in pairs(from.archive) do
+            if key == "roles" and type(value) == "table" then
+                archive.roles = archive.roles or {}
+                for role, n in pairs(value) do archive.roles[role] = (archive.roles[role] or 0) + n end
+            elseif key == "first" then
+                archive.first = archive.first and math.min(archive.first, value) or value
+            elseif key == "last" then
+                archive.last = archive.last and math.max(archive.last, value) or value
+            elseif type(value) == "number" then
+                archive[key] = (archive[key] or 0) + value
+            end
+        end
+    end
+    -- Anything else (a nickname...) only fills a gap.
+    for key, value in pairs(from) do
+        if into[key] == nil and key ~= "nameRealm" then into[key] = value end
+    end
+end
+
+-- Moves everything saved under "Name-" (a blank realm, from while Forever
+-- reported no realm name and before GetMyRealm) to "Name-<your realm>",
+-- merging it into the entry already there for anyone met before: the
+-- duplicate cards in the journal. Also fixes the author of notes written
+-- then and what the note window and Nearby keep per player. Runs on every
+-- load and finds nothing once done. Returns moved, merged.
+function addon:RepairBlankRealms()
+    local realm = self:GetMyRealm()
+    if realm == "" then return 0, 0 end
+    local g = self.db.global
+
+    local function Fixed(nameRealm)
+        if type(nameRealm) == "string" and nameRealm:match("^[^-]+%-$") then return nameRealm .. realm end
+    end
+    -- Re-keys every blank-realm key of tbl, combining with an existing entry.
+    local function Rekey(tbl, Combine)
+        if type(tbl) ~= "table" then return 0, 0 end
+        local blank, moved, merged = {}, 0, 0
+        for key in pairs(tbl) do
+            if Fixed(key) then table.insert(blank, key) end
+        end
+        for _, old in ipairs(blank) do
+            local new, value = Fixed(old), tbl[old]
+            tbl[old] = nil
+            if tbl[new] ~= nil then
+                tbl[new] = Combine(tbl[new], value, new)
+                merged = merged + 1
+            else
+                tbl[new] = value
+                moved = moved + 1
+            end
+        end
+        return moved, merged
+    end
+
+    local moved, merged = Rekey(g.players, function(into, from)
+        MergePlayerRecords(into, from, g)
+        return into
+    end)
+    for nameRealm, record in pairs(g.players) do
+        if type(record) == "table" and Fixed(record.nameRealm) then record.nameRealm = nameRealm end
+    end
+    for _, review in pairs(g.reviews) do
+        local author = type(review) == "table" and Fixed(review.author)
+        if author then review.author = author end
+    end
+
+    -- When the note window last asked about them: the later time.
+    Rekey(AlliesJournalDB.askedAt, function(a, b)
+        return (type(a) == "number" and type(b) == "number") and math.max(a, b) or a
+    end)
+    -- "/aj why": both lists, oldest first, at most 6 (as LogDecision keeps them).
+    Rekey(AlliesJournalDB.promptLog, function(a, b)
+        if type(a) ~= "table" or type(b) ~= "table" then return a end
+        for _, entry in ipairs(b) do table.insert(a, entry) end
+        table.sort(a, function(x, y) return (x.at or 0) < (y.at or 0) end)
+        while #a > 6 do table.remove(a, 1) end
+        return a
+    end)
+    -- Nearby: one entry covering both.
+    Rekey(AlliesJournalDB.nearby, function(a, b)
+        if type(a) ~= "table" or type(b) ~= "table" then return a end
+        local newer = (b.last or 0) > (a.last or 0)
+        a.first = math.min(a.first or b.first or 0, b.first or a.first or 0)
+        a.count = (a.count or 0) + (b.count or 0)
+        a.last = math.max(a.last or 0, b.last or 0)
+        for _, key in ipairs({ "zone", "class", "level", "race" }) do
+            if b[key] ~= nil and (newer or a[key] == nil) then a[key] = b[key] end
+        end
+        return a
+    end)
+    return moved, merged
+end
+
 -- Keeps what Blizzard's Recent Allies logged about people in the journal
 -- (dungeons, raids, trades...), because that list forgets people after a
 -- while. Adds new entries to the player's own record, capped at the newest 60.
@@ -1232,7 +1433,7 @@ function addon:SetDemo(on)
     end
     for _, nameRealm in ipairs(old) do self:ForgetPlayer(nameRealm) end
     if on then
-        local realm = GetRealmName()
+        local realm = self:GetMyRealm()
         local mine = self:GetShortName(self:GetPlayerName())
         for i, d in ipairs(DEMO_PEOPLE) do
             local nameRealm = d.name .. "-" .. realm

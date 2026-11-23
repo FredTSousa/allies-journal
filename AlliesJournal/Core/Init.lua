@@ -330,6 +330,17 @@ function AlliesJournal:OnInitialize()
     end
 
     self.db = { global = g }
+    -- Players saved with a blank realm while Forever reported none get
+    -- theirs back, and duplicates are merged (see GetMyRealm).
+    do
+        local ok, moved, merged = pcall(self.RepairBlankRealms, self)
+        if ok and (moved > 0 or merged > 0) then
+            self:Print(string.format("Fixed %d player(s) saved without a realm name since a game update; %d were duplicates of someone already in your journal and are merged into one entry.",
+                moved + merged, merged))
+        elseif not ok then
+            self:Print("Couldn't fix players saved without a realm name: " .. tostring(moved))
+        end
+    end
     self:RegisterChatCommand("aj", "SlashCommand")
     self:RegisterChatCommand("alliesjournal", "SlashCommand")
     self:RegisterChatCommand("journal", "SlashCommand")
@@ -717,7 +728,7 @@ function AlliesJournal:DumpRecentAllyDetails(query)
                     local realmName = game.realmName ~= "" and game.realmName or game.realmDisplayName
                     table.insert(bnetLines, string.format("on your server and faction: %s (realm ID %s, yours %s; realm %q, yours %q; faction %s, yours %s)",
                         tostring(self:IsOnMyServerAndFaction(game.realmID, realmName, game.factionName)),
-                        tostring(game.realmID), tostring(GetRealmID and GetRealmID()), tostring(realmName), tostring(GetRealmName()),
+                        tostring(game.realmID), tostring(GetRealmID and GetRealmID()), tostring(realmName), tostring(self:GetMyRealm()),
                         tostring(game.factionName), tostring((UnitFactionGroup("player")))))
                     if account then
                         table.insert(bnetLines, string.format("account: isAFK=%s isDND=%s appearOffline=%s lastOnlineTime=%s",
@@ -789,7 +800,7 @@ end
 function AlliesJournal:QueueTestReview()
     self:GetModule("ReviewPrompt"):QueueBatch({
         {
-            nameRealm = "Testmann-" .. GetRealmName(),
+            nameRealm = "Testmann-" .. self:GetMyRealm(),
             encounter = "Test Encounter",
             role = "tank",
             fights = { { duration = 60, dps = 123456, hps = 0 } },
@@ -808,7 +819,7 @@ end
 -- Three fake players at once, each with their own fights and chat, to try the
 -- group window (the "strip" developer option) without a real dungeon.
 function AlliesJournal:QueueTestBatch()
-    local realm = GetRealmName()
+    local realm = self:GetMyRealm()
     local members = {
         { guid = "Fake-1", nameRealm = "Testmann-" .. realm, class = "WARRIOR", role = "tank" },
         { guid = "Fake-2", nameRealm = "Fakename Two-" .. realm, class = "MAGE", role = "dps" },
@@ -858,7 +869,7 @@ function AlliesJournal:QueueTestBatch()
 end
 
 function AlliesJournal:QueueTestGroupReview()
-    local myRealm = GetRealmName()
+    local myRealm = self:GetMyRealm()
     local fakeMembers = {
         { guid = "Fake-1", nameRealm = "Testmann-" .. myRealm, class = "WARRIOR", role = "tank" },
         { guid = "Fake-2", nameRealm = "Fakename Two-" .. myRealm, class = "MAGE", role = "dps" },
@@ -960,7 +971,7 @@ function AlliesJournal:ReplayCapturedFights(text)
 
     self:GetModule("ReviewPrompt"):QueueBatch({
         {
-            nameRealm = data.nameRealm or ("ReplayTest-" .. GetRealmName()),
+            nameRealm = data.nameRealm or ("ReplayTest-" .. self:GetMyRealm()),
             encounter = "Replayed capture",
             role = data.role,
             fights = data.fights,

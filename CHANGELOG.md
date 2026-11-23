@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Fixed on Forever: since a game update on November 21 the game no longer reports a realm name there, so the journal saved everyone you met from then on under a blank realm, and anyone already in your journal got a second card. The journal now keeps using the realm name the game reported before. The next time you log in, it moves those players back and merges each duplicate into one card, notes and sessions included, and says in chat how many it fixed.
 - New switch in `/aj options`, Display tab, under **Journal window**: **Show friends I can invite**. Friends on your server and faction get a card in the journal, even with no note on them yet, marked "Friend - no notes yet". Right-click one to whisper, invite or write a note. A friend you have a note or a session with keeps their usual card. It's off by default.
 - With it on, **Friends at the top of the list** (on by default) orders the list as online friends, then everyone else who's online, then offline friends, then the rest.
 - Battle.net only says which character a friend is playing while they're online. Once the journal has seen a friend online on your server and faction with the switch on, it shows them as that character when they're offline too. It stores this without their BattleTag.
