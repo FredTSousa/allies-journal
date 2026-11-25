@@ -270,6 +270,10 @@ local function BuildNotes(scroll)
             function() return settings.gateMinutes or 10 end,
             function(v) settings.gateMinutes = v end)
         AddNote(group, "Shorter than this, you only get a recap line in chat.")
+        AddSlider(group, "After leaving a dungeon, wait in case I go back in (minutes)", 0, 30, 1,
+            function() return settings.exitWaitMinutes or 10 end,
+            function(v) settings.exitWaitMinutes = v end)
+        AddNote(group, "Stepping out to repair or swap gear doesn't end the run: go back into the same dungeon in time and it carries on, with nobody asked yet. Otherwise the window opens when the wait is over, when the group breaks up, or when you click Ask now in chat. 0 asks as soon as you leave.")
         AddSlider(group, "Ask about the same player again after (hours)", 0, 72, 1,
             function() return settings.askAgainHours or 12 end,
             function(v) settings.askAgainHours = v end)
@@ -855,6 +859,7 @@ function Options:ResetAll()
     settings.askAgainHours = 12
     settings.windowNoteLimit = 3
     settings.skipFriends = false
+    settings.exitWaitMinutes = 10
     settings.notices = { joinNotice = true, onlineAlerts = true, facesSummary = true, runRecap = true, warnBad = false, joinPanel = false }
     settings.streamerMode = false
     settings.paused = false

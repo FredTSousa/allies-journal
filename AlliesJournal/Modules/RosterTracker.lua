@@ -57,6 +57,16 @@ RosterTracker.handledSession = {}
 -- open world) so a second dungeon with the same party stays separate. In
 -- memory, plus the run cache across a /reload.
 RosterTracker.tally = {}
+-- A dungeon run you've walked out of but that may not be over (see
+-- LeaveDungeon): { runId, mapID, name, leftAt, waitMinutes, members,
+-- sessions, announced, due }. nil when no run is on hold. In memory only.
+RosterTracker.heldRun = nil
+-- runId -> true once the game itself said the run was finished (Group
+-- Finder or Mythic+ completion), so leaving afterwards needn't wait.
+RosterTracker.runEnded = {}
+-- Map ID of the dungeon you're in, or were last in: GetInstanceInfo already
+-- reports the open world by the time the exit is handled.
+RosterTracker.dungeonMapID = nil
 
 -- Where this grouping happened, for session/review records and the
 -- Browser's "Seen ... - <place>" text. The dungeon/M+ name when we have
@@ -64,10 +74,11 @@ RosterTracker.tally = {}
 -- be recorded as "Unknown", which is why some players showed no place.
 -- currentEncounterName is deliberately kept after leaving an instance
 -- (the zone-exit trigger and people leaving the group a moment later both
--- still need it), so it's only trusted for 15 minutes after the exit.
+-- still need it), so it's only trusted for 15 minutes after the exit, or
+-- for as long as the run is on hold.
 function RosterTracker:PlaceName()
     if self.currentEncounterName
-        and (not self.instanceExitedAt or time() - self.instanceExitedAt < 900) then
+        and (self.heldRun or not self.instanceExitedAt or time() - self.instanceExitedAt < 900) then
         return self.currentEncounterName
     end
     local zone = GetZoneText and GetZoneText()
@@ -126,9 +137,13 @@ end
 -- A second after a fight ends: ReviewCapture records the fight on this same
 -- event, and the order the two run in isn't fixed, so waiting a moment makes
 -- sure the save includes it. If the next pull has already started by then,
--- SaveRunIfDue skips and the next fight's end tries again.
+-- SaveRunIfDue skips and the next fight's end tries again. A run on hold
+-- whose wait ran out mid-fight ends now too (see FinishHeldRunIfDue).
 function RosterTracker:OnCombatEnd()
-    C_Timer.After(1, function() self:SaveRunIfDue() end)
+    C_Timer.After(1, function()
+        self:SaveRunIfDue()
+        self:FinishHeldRunIfDue()
+    end)
 end
 
 function RosterTracker:SaveRun()
@@ -226,9 +241,11 @@ end
 
 -- The run a departure or manual action belongs to: the dungeon you're in,
 -- or - for 15 minutes after leaving one - the one you just left (same
--- window PlaceName trusts). nil means open-world content.
+-- window PlaceName trusts), or the run on hold however long the wait is.
+-- nil means open-world content.
 function RosterTracker:ActiveRunId()
     if self.currentRunId then return self.currentRunId end
+    if self.heldRun then return self.heldRun.runId end
     if self.lastRunId and self.instanceExitedAt and time() - self.instanceExitedAt < 900 then
         return self.lastRunId
     end
@@ -301,7 +318,8 @@ end
 -- `global` (in AlliesJournalDB.promptLog, by nameRealm) so it survives a
 -- /reload but never ends up in an export; pruned along with askedAt.
 -- outcome: "window", "waiting" (added to notes put off with Later), "chat"
--- (an [Add a note] link instead of a window) or "skipped".
+-- (an [Add a note] link instead of a window), "held" (you left the dungeon
+-- and the run is on hold, see LeaveDungeon) or "skipped".
 local LOG_PER_PERSON = 6
 
 function RosterTracker:LogDecision(nameRealm, trigger, outcome, detail)
@@ -587,6 +605,12 @@ function RosterTracker:OnRosterUpdate()
         else
             self:QueueCandidates(departed, false, runId, trigger)
         end
+        -- The group broke up while a run was on hold: it's over. Everyone was
+        -- just asked about on the way out, so only the run's notices are
+        -- left - before the tallies are cleared below, since they use them.
+        if self.heldRun and not next(newRoster) then
+            self:FinishHeldRun(trigger, true)
+        end
     end
 
     -- Gate state gets cleared AFTER QueueCandidates (and the session-
@@ -709,9 +733,28 @@ function RosterTracker:QueueDeparted(nameRealm)
     return true
 end
 
+-- Everyone in the group right now, in the shape QueueCandidates takes.
+function RosterTracker:RosterCandidates()
+    local candidates = {}
+    for guid, data in pairs(self.roster) do
+        table.insert(candidates, { guid = guid, data = data, since = self.groupedSince[guid] })
+    end
+    return candidates
+end
+
+-- The end-of-run chat notices ("Familiar faces", "Run recap"). Each is said
+-- once per run, so calling this again for the same run is harmless.
+function RosterTracker:RunNotices(candidates, runId, endedAt)
+    if not runId then return end
+    addon:GetModule("Notices"):FamiliarFaces(candidates, runId)
+    addon:GetModule("Notices"):RunRecap(candidates, runId, endedAt)
+end
+
 -- runId: the dungeon run that just finished, or nil for open-world content.
 -- trigger: a few words for "/aj why", e.g. "you left the dungeon".
-function RosterTracker:QueueEntireRoster(runId, trigger)
+-- endedAt: when the run counts as over, if not now (a run on hold ends when
+-- you left the dungeon, not when the wait ran out).
+function RosterTracker:QueueEntireRoster(runId, trigger, endedAt)
     trigger = trigger or "the dungeon ended"
     if self:InRaidContext() then  -- no automatic prompts in raids
         for _, data in pairs(self.roster) do
@@ -719,16 +762,10 @@ function RosterTracker:QueueEntireRoster(runId, trigger)
         end
         return
     end
-    local candidates = {}
-    for guid, data in pairs(self.roster) do
-        table.insert(candidates, { guid = guid, data = data, since = self.groupedSince[guid] })
-    end
-    self:QueueCandidates(candidates, true, runId, trigger)
+    local candidates = self:RosterCandidates()
+    self:QueueCandidates(candidates, true, runId, trigger, endedAt)
     -- After the sessions above are recorded, so the counts include this run.
-    if runId then
-        addon:GetModule("Notices"):FamiliarFaces(candidates, runId)
-        addon:GetModule("Notices"):RunRecap(candidates, runId)
-    end
+    self:RunNotices(candidates, runId, endedAt)
 end
 
 -- Runs alongside (not instead of) the review-prompt gate below, on the
@@ -743,7 +780,12 @@ end
 -- Save) and never carry per-fight detail, only the compact aggregate
 -- ReviewCapture:AggregateFights computes from ALL fights recorded so
 -- far - there's no picker for a plain session, only for a review.
-function RosterTracker:CheckSessionEligibility(candidates, runId)
+--
+-- recorded (optional): filled with guid -> { id, nameRealm, since } for each
+-- session saved, so a run on hold can take them back if it carries on (see
+-- ResumeHeldRun). endedAt (optional): when the time together stops counting,
+-- if not now.
+function RosterTracker:CheckSessionEligibility(candidates, runId, recorded, endedAt)
     local capture = addon:GetModule("ReviewCapture")
     local minGrouped, minCombat = self:GetSessionGateSeconds()
     -- Open world: only fights since the outing began (see RunSince).
@@ -765,13 +807,13 @@ function RosterTracker:CheckSessionEligibility(candidates, runId)
         end
 
         if c.since and not alreadyRecorded then
-            local groupedSeconds = time() - self:RunSince(c.since, runId)
+            local groupedSeconds = (endedAt or time()) - self:RunSince(c.since, runId)
             local combatSeconds = capture:GetCombatSeconds(c.guid, runId, fightsSince)
 
             if groupedSeconds >= minGrouped and combatSeconds >= minCombat then
                 local aggregate = capture:AggregateFights(capture:GetRunFights(c.guid, runId, fightsSince))
                 local tally = self:GetTally(c.guid, runId)
-                addon:AddSession(c.data.nameRealm, {
+                local session = addon:AddSession(c.data.nameRealm, {
                     zone = self:PlaceName(),
                     role = c.data.role,
                     character = addon:GetShortName(addon:GetPlayerName()),
@@ -793,6 +835,9 @@ function RosterTracker:CheckSessionEligibility(candidates, runId)
                     dispels = aggregate.dispels,
                     deaths = aggregate.deaths,
                 })
+                if recorded and session then
+                    recorded[c.guid] = { id = session.id, nameRealm = c.data.nameRealm, since = c.since }
+                end
 
                 if runId then
                     MarkHandled(self.handledSession, c.guid, runId)
@@ -804,11 +849,46 @@ function RosterTracker:CheckSessionEligibility(candidates, runId)
     end
 end
 
+-- Why the note window wouldn't open for a candidate, or nil when it would.
+-- The same checks as always, in order; the first one that fails is what
+-- "/aj why" reports. now: when the time together stops counting (defaults
+-- to now). Changes nothing, so it can also be asked ahead of time.
+function RosterTracker:SkipReason(c, runId, now)
+    now = now or time()
+    local nameRealm = c.data.nameRealm
+    local since = self:RunSince(c.since, runId)
+    local gateSeconds = self:GetGateSeconds()
+    local alreadyQueued
+    if runId then
+        alreadyQueued = IsHandled(self.handledReview, c.guid, runId)
+    else
+        alreadyQueued = self.reviewQueued[c.guid]
+    end
+    local askedKind, askedAt, askedUntil = self:AskedRecentlyInfo(nameRealm)
+
+    if self:SkipsAsFriend(nameRealm, c.guid) then
+        return "they're your friend, and \"Don't ask about my friends\" is on in /aj options"
+    elseif not since then
+        return "no record of when you grouped up with them"
+    elseif now - since < gateSeconds then
+        return string.format("together %s of the %s needed%s", FormatDuration(math.max(0, now - since)),
+            FormatDuration(gateSeconds), runId and " (counted from when you entered the dungeon)" or "")
+    elseif alreadyQueued then
+        return runId and "already handled earlier in this dungeon run" or "already handled since you grouped up"
+    elseif askedKind then
+        return string.format("%s %s ago, so not asked again for another %s (\"ask again after\" in /aj options)",
+            askedKind == "note" and "you wrote a note on them" or "the note window already asked about them",
+            FormatDuration(time() - askedAt), FormatDuration(askedUntil - time()))
+    end
+    return nil
+end
+
 -- unitStillValid: true when candidates come from the live roster (instance
 -- complete) so a fresh role read is possible; false when the player has
 -- already left the group (leave/kick), where only the last cached read exists.
 -- trigger: what set this off, in a few words, for "/aj why".
-function RosterTracker:QueueCandidates(candidates, unitStillValid, runId, trigger)
+-- endedAt: when the time together stops counting, if not now.
+function RosterTracker:QueueCandidates(candidates, unitStillValid, runId, trigger, endedAt)
     trigger = trigger or "the group changed"
     -- "Pause recording": no new sessions and no automatic note windows.
     if addon.db.global.settings.paused then
@@ -817,40 +897,15 @@ function RosterTracker:QueueCandidates(candidates, unitStillValid, runId, trigge
         end
         return
     end
-    self:CheckSessionEligibility(candidates, runId)
+    self:CheckSessionEligibility(candidates, runId, nil, endedAt)
 
     local capture = addon:GetModule("ReviewCapture")
-    local gateSeconds = self:GetGateSeconds()
     local batch, offers = {}, {}
 
     for _, c in ipairs(candidates) do
         local nameRealm = c.data.nameRealm
         local since = self:RunSince(c.since, runId)
-        local alreadyQueued
-        if runId then
-            alreadyQueued = IsHandled(self.handledReview, c.guid, runId)
-        else
-            alreadyQueued = self.reviewQueued[c.guid]
-        end
-        local askedKind, askedAt, askedUntil = self:AskedRecentlyInfo(nameRealm)
-
-        -- The same checks as always, in order; the first one that fails is
-        -- what "/aj why" reports.
-        local skip
-        if self:SkipsAsFriend(nameRealm, c.guid) then
-            skip = "they're your friend, and \"Don't ask about my friends\" is on in /aj options"
-        elseif not since then
-            skip = "no record of when you grouped up with them"
-        elseif time() - since < gateSeconds then
-            skip = string.format("together %s of the %s needed%s", FormatDuration(time() - since),
-                FormatDuration(gateSeconds), runId and " (counted from when you entered the dungeon)" or "")
-        elseif alreadyQueued then
-            skip = runId and "already handled earlier in this dungeon run" or "already handled since you grouped up"
-        elseif askedKind then
-            skip = string.format("%s %s ago, so not asked again for another %s (\"ask again after\" in /aj options)",
-                askedKind == "note" and "you wrote a note on them" or "the note window already asked about them",
-                FormatDuration(time() - askedAt), FormatDuration(askedUntil - time()))
-        end
+        local skip = self:SkipReason(c, runId, endedAt)
 
         if skip then
             self:LogDecision(nameRealm, trigger, "skipped", skip)
@@ -942,7 +997,149 @@ end
 -- fast zone change in between still resolves to the right run.
 function RosterTracker:CloseRunSoon(trigger)
     local runId = self.currentRunId
+    if runId then self.runEnded[runId] = true end
     C_Timer.After(2, function() self:QueueEntireRoster(runId, trigger) end)
+end
+
+----------------------------------------------------------------------
+-- Leaving a dungeon: a break, or the end of the run?
+----------------------------------------------------------------------
+
+local ASK_NOW_LINK = "|cff40ff40|Haddon:AlliesJournal:endrun|h[Ask now]|h|r"
+
+-- Leaving a dungeon used to end the run on the spot, with everyone asked
+-- about at once - even when the group had only stepped out to repair, swap
+-- gear or sort something out, and then went back in to finish. Forever has
+-- no "dungeon complete" event for its dungeons (no Group Finder completion,
+-- no lockouts), so leaving is the only sign the game gives, and it can't
+-- tell a break from the end.
+--
+-- So the run goes on hold instead. Sessions are saved now, so a logout or
+-- /reload during the wait loses nothing, but the note window and the
+-- end-of-run notices wait exitWaitMinutes. Walking back into the same
+-- dungeon in that time carries the run on (ResumeHeldRun). Otherwise it
+-- ends when the wait runs out, when you go into another dungeon, when the
+-- group breaks up, or when you click [Ask now] (FinishHeldRun). Someone
+-- leaving the group during the wait is asked about as they go, as always.
+--
+-- The hold is in memory only: after a /reload during it the window doesn't
+-- come, and going back in starts a new run, as leaving always did.
+function RosterTracker:LeaveDungeon()
+    local runId = self.currentRunId
+    local settings = addon.db.global.settings
+    local waitMinutes = settings.exitWaitMinutes or 10
+    -- Nothing worth holding: no wait set, no group, a raid group (never
+    -- asked), recording paused, or a run the game already said was over
+    -- (a Group Finder or Mythic+ completion, which has asked already).
+    if waitMinutes <= 0 or not runId or not next(self.roster) or self:InRaidContext()
+        or settings.paused or self.runEnded[runId] then
+        self:QueueEntireRoster(runId, "you left the dungeon")
+        return
+    end
+
+    local now = time()
+    local candidates = self:RosterCandidates()
+    local held = {
+        runId = runId,
+        mapID = self.dungeonMapID,
+        name = self.currentEncounterName or "the dungeon",
+        leftAt = now,
+        waitMinutes = waitMinutes,
+        members = candidates,  -- for the notices, if the group breaks up meanwhile
+        sessions = {},
+    }
+    self.heldRun = held
+    self:CheckSessionEligibility(candidates, runId, held.sessions, now)
+
+    -- Said only when someone would get the window (or the chat link) if the
+    -- run ended now, so a short visit doesn't print a line about nothing.
+    for _, c in ipairs(candidates) do
+        if not self:SkipReason(c, runId, now) then
+            held.announced = true
+            self:LogDecision(c.data.nameRealm, "you left the dungeon", "held", string.format(
+                "the window waits %d min in case you go back in", waitMinutes))
+        end
+    end
+    if held.announced then
+        addon:Print(string.format("Left %s - the note window waits %d min in case you go back in. %s",
+            held.name, waitMinutes, ASK_NOW_LINK))
+    end
+
+    C_Timer.After(waitMinutes * 60, function()
+        if self.heldRun ~= held then return end
+        held.due = true
+        self:FinishHeldRunIfDue()
+    end)
+end
+
+-- Back into the same dungeon while its run is on hold: it carries on, with
+-- the same run id, so its fights, time and bosses stay together.
+function RosterTracker:ResumeHeldRun()
+    local held = self.heldRun
+    if not held then return end
+    self.heldRun = nil
+    local runId = held.runId
+    self.currentRunId = runId
+    self.lastRunId = runId
+    -- The sessions saved on the way out only cover the first part. Take them
+    -- back for whoever is still here, so the end of the run saves them whole.
+    -- Anyone who left during the break (or left and came back) keeps theirs.
+    for guid, saved in pairs(held.sessions) do
+        if self.roster[guid] and self.groupedSince[guid] == saved.since then
+            addon:DeleteSession(saved.nameRealm, saved.id)
+            if self.handledSession[guid] then self.handledSession[guid][runId] = nil end
+        end
+    end
+    if held.announced then
+        addon:Print(string.format("Back in %s - carrying on with the same run.", held.name))
+    end
+end
+
+-- Ends the run on hold: the note window and the end-of-run notices, with
+-- the time counted up to when you left. groupEnded: everyone was already
+-- asked about as they left the group, so only the notices are left.
+function RosterTracker:FinishHeldRun(trigger, groupEnded)
+    local held = self.heldRun
+    if not held or held.ending then return end
+    held.ending = true
+    -- heldRun is cleared only afterwards: until then PlaceName still names
+    -- the dungeon, however long the wait was.
+    if groupEnded then
+        self:RunNotices(held.members, held.runId, held.leftAt)
+    else
+        -- Only the people who were in the run when you left and are still
+        -- here: anyone who left meanwhile was asked about as they went, and
+        -- anyone who joined during the break wasn't in the dungeon. Not
+        -- QueueEntireRoster, whose raid check is about the run - and this
+        -- run wasn't a raid when you left it (see LeaveDungeon).
+        local candidates = {}
+        for _, c in ipairs(held.members) do
+            local data = self.roster[c.guid]
+            if data and self.groupedSince[c.guid] == c.since then
+                table.insert(candidates, { guid = c.guid, data = data, since = c.since })
+            end
+        end
+        self:QueueCandidates(candidates, true, held.runId, trigger, held.leftAt)
+        self:RunNotices(candidates, held.runId, held.leftAt)
+    end
+    if self.heldRun == held then self.heldRun = nil end
+end
+
+-- The wait ran out: end the run, unless you're mid-fight, in which case it
+-- ends when the fight does (OnCombatEnd) rather than popping up a window.
+function RosterTracker:FinishHeldRunIfDue()
+    local held = self.heldRun
+    if not held or not held.due or InCombatLockdown() then return end
+    self:FinishHeldRun(string.format("you stayed out of %s for %d min", held.name, held.waitMinutes))
+end
+
+-- The [Ask now] link in the "Left <dungeon>" chat line.
+function RosterTracker:EndHeldRunNow()
+    if not self.heldRun then
+        addon:Print("That run has already ended.")
+        return
+    end
+    self:FinishHeldRun("you clicked Ask now")
 end
 
 function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
@@ -966,14 +1163,39 @@ function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
     end
     self.corpseRun = nil
 
+    local mapID = isDungeonNow and select(8, GetInstanceInfo()) or nil
+    -- Walking into a dungeon while a run is on hold (see LeaveDungeon): the
+    -- same dungeon carries it on; any other dungeon, or a raid or
+    -- battleground, means it's over. Done before the place name below
+    -- changes, so the run that ends keeps its own. Matched by map ID, or by
+    -- name if the client didn't give one.
+    if inInstance and not self.wasInDungeon and self.heldRun then
+        local held = self.heldRun
+        local same
+        if isDungeonNow then
+            if held.mapID and mapID then
+                same = held.mapID == mapID
+            else
+                same = held.name == GetInstanceInfo()
+            end
+        end
+        if same then
+            self:ResumeHeldRun()
+        else
+            self:FinishHeldRun(isDungeonNow and "you went into another dungeon" or "you went into another instance")
+        end
+    end
+
     if isDungeonNow then
         self.currentEncounterName = GetInstanceInfo()
         self.instanceExitedAt = nil
+        self.dungeonMapID = mapID
     end
 
     -- Entering a dungeon starts a new run, so everything recorded inside it
-    -- is kept apart from the open world and from any earlier dungeon.
-    if isDungeonNow and not self.wasInDungeon and not self:TryRestoreRun() then
+    -- is kept apart from the open world and from any earlier dungeon -
+    -- unless a run on hold just carried on above.
+    if isDungeonNow and not self.wasInDungeon and not self.currentRunId and not self:TryRestoreRun() then
         self.runCounter = self.runCounter + 1
         self.currentRunId = self.runCounter
         self.lastRunId = self.runCounter
@@ -981,13 +1203,11 @@ function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
     end
 
     if self.wasInDungeon and not isDungeonNow then
-        -- Best-effort catch-all "normal dungeon complete" trigger for groups
-        -- that didn't go through Group Finder (no LFG_COMPLETION_REWARD).
-        -- This also fires on an early group walkout; the time gate is what
-        -- keeps that from producing spurious prompts. It's the loosest
-        -- trigger of the three - check it in-game and tighten it if it
-        -- over-fires.
-        self:QueueEntireRoster(self.currentRunId, "you left the dungeon")
+        -- The catch-all end of a dungeon for groups that didn't go through
+        -- Group Finder (no LFG_COMPLETION_REWARD) - on Forever, the only one
+        -- that ever fires. Leaving can just be a break, so the run goes on
+        -- hold for a while rather than ending here (see LeaveDungeon).
+        self:LeaveDungeon()
     end
 
     if self.wasInDungeon and not isDungeonNow then
@@ -1058,6 +1278,7 @@ end
 local OUTCOME_LABELS = {
     window = "|cff40ff40window opened|r",
     waiting = "|cffffd100added to Later|r",
+    held = "|cffffd100on hold|r",
     chat = "|cff40ff40chat link|r",
     skipped = "|cffff9933no window|r",
 }
@@ -1087,6 +1308,17 @@ function RosterTracker:ExplainPrompt(input)
     -- And where things stand right now.
     local lines = {}
     if settings.paused then table.insert(lines, "recording is paused (/aj pause)") end
+
+    -- A dungeon you walked out of whose run hasn't ended yet.
+    local held = self.heldRun
+    if held then
+        if held.due then
+            table.insert(lines, string.format("the note window for %s opens when you're out of combat", held.name))
+        else
+            table.insert(lines, string.format("the note window for %s waits another %s in case you go back in",
+                held.name, FormatDuration(math.max(0, held.leftAt + held.waitMinutes * 60 - now))))
+        end
+    end
 
     -- Coming back into a dungeon after a reload, relog or disconnect either
     -- carries the run on or starts it over, which restarts the clock.

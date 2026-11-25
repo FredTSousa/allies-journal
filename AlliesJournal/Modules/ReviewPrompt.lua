@@ -1473,6 +1473,8 @@ hooksecurefunc("SetItemRef", function(link)
             addon:GetModule("ReviewPrompt"):TakeOffer(tonumber((select(4, strsplit(":", link)))))
         elseif action == "runs" then
             addon:GetModule("Diary"):ShowRuns()
+        elseif action == "endrun" then
+            addon:GetModule("RosterTracker"):EndHeldRunNow()
         elseif action == "player" then
             local nameRealm = select(4, strsplit(":", link))
             if nameRealm then addon:GetModule("Browser"):ShowPlayer(nameRealm) end

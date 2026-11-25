@@ -183,6 +183,9 @@ function AlliesJournal:OnInitialize()
     if g.settings.windowNoteLimit == nil then g.settings.windowNoteLimit = 3 end
     -- Friends never get the automatic note window (see RosterTracker:SkipsAsFriend).
     if g.settings.skipFriends == nil then g.settings.skipFriends = false end
+    -- Minutes a dungeon run stays on hold after you walk out, in case you go
+    -- back in (see RosterTracker:LeaveDungeon). 0 asks as soon as you leave.
+    if g.settings.exitWaitMinutes == nil then g.settings.exitWaitMinutes = 10 end
     -- Small chat reminders: someone you have a note on joins your group, and
     -- someone you noted as Great comes online.
     g.settings.notices = g.settings.notices or {}

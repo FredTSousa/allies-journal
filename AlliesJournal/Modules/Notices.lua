@@ -190,17 +190,25 @@ local function RecapDuration(seconds)
     return string.format("%dm", m)
 end
 
-function Notices:RunRecap(candidates, runId)
+-- endedAt: when the run ended, if not now (a run put on hold after leaving
+-- the dungeon ends when you left, not when the wait ran out).
+function Notices:RunRecap(candidates, runId, endedAt)
     local s = Settings()
     if not s or not s.runRecap or not runId or self.recapShown[runId] then return end
     local tracker = addon:GetModule("RosterTracker")
     local started = tracker.runStart[runId]
     if not started or #candidates == 0 then return end
-    local seconds = time() - started
+    local seconds = (endedAt or time()) - started
     if seconds < 240 then return end
     self.recapShown[runId] = true
 
-    local tally = tracker:GetTally(candidates[1].guid, runId)
+    -- Everyone grouped shares the same counts. Take them from whoever still
+    -- has them: someone who left during a break has had theirs cleared.
+    local tally = {}
+    for _, c in ipairs(candidates) do
+        local counts = tracker:GetTally(c.guid, runId)
+        if next(counts) then tally = counts break end
+    end
     local parts = { RecapDuration(seconds) }
     local function Add(count, one, many)
         if (count or 0) > 0 then table.insert(parts, count .. " " .. (count == 1 and one or many)) end
