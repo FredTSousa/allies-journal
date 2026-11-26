@@ -1148,6 +1148,13 @@ function RosterTracker:OnZoneCheck(event, isInitialLogin, isReloadingUi)
     local inInstance, instanceType = IsInInstance()
     local isDungeonNow = inInstance and instanceType == "party"
     self.inRaidInstance = inInstance and instanceType == "raid"
+    -- So the journal can tell when other players are in this place too
+    -- (addon:IsDungeonPlace). Only the instance's own name: the zone name
+    -- can still be the zone outside at this point (it gave Feralas inside
+    -- Dire Maul).
+    if isDungeonNow or self.inRaidInstance then
+        pcall(addon.LearnDungeonPlace, addon, (GetInstanceInfo()))
+    end
     local deadOrGhost = UnitIsDeadOrGhost("player") and true or false
     -- After a load screen or /reload everyone in the group looks new; stay
     -- quiet for a few seconds so that isn't announced.

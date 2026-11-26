@@ -398,6 +398,7 @@ local DEV_COMMANDS = {
     allyinfo = true,
     badgetest = true,
     fakenames = true,
+    dungeons = true,
     export = true,
     import = true,
 }
@@ -538,6 +539,9 @@ function AlliesJournal:SlashCommand(input)
         self:DumpRecentAllyDetails(rest)
     elseif cmd == "badgetest" then
         self:GetModule("Tooltip"):ToggleBadgeTest()
+    elseif cmd == "dungeons" then
+        self:DescribeDungeonPlaces(rest)
+        pcall(function() self:GetModule("Browser"):RefreshIfShown() end)
     elseif cmd == "fakenames" then
         self.fakeNames = not self.fakeNames
         self:Print(self.fakeNames and "Made-up names ON for screenshots: the journal, note window, Runs, In numbers and the addon's chat lines show invented names and guilds. Nameplates, unit frames and chat senders are drawn by the game and keep real names. Reopen any open window. Off again after a /reload."
@@ -595,6 +599,7 @@ function AlliesJournal:SlashCommand(input)
             self:Print("  /pr recentallydebug - toggle live logging of what SetRecentAllyPinned/SetRecentAllyNote actually return when a review is saved, to debug a pin/note that isn't sticking")
             self:Print("  /aj allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) and what Battle.net reports for them into a copyable window; defaults to the selected player or your target")
             self:Print("  /aj badgetest - toggle a fake badge on every party/raid frame and nameplate found, to check placement without a group")
+            self:Print("  /aj dungeons [place] - whether a place counts as a dungeon or raid (players there show in blue in the journal); with no place, every name known and where it came from, in a copyable window")
             self:Print("  /aj fakenames - toggle made-up player and guild names everywhere the addon draws them, for screenshots of a real journal (display only, off after a /reload)")
         end
     end

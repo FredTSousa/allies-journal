@@ -748,6 +748,140 @@ function addon:GetRecentAllyInteractionsInWindow(guid, sinceTime)
     return inWindow
 end
 
+-- Whether a place name (a Recent Allies currentLocation, a Battle.net
+-- friend's areaName, a /who area) is a dungeon or raid, so the journal can
+-- show who is busy in one. Nothing reports that directly for other
+-- players, only the place's name, so it's matched against names:
+--  * the classic dungeons and raids, as the English client names them
+--    (inside, the zone and instance names can differ, so both are listed),
+--    plus Forever's own that were seen before the lists below caught them;
+--  * every dungeon and raid in the game's Dungeon Finder data, which is how
+--    Forever's new dungeons (Blackrook Hold) are known before you go in;
+--  * every place your own sessions were recorded in a dungeon (session.
+--    dungeon), which covers Forever's own instances such as Alcaz Prison;
+--  * every dungeon or raid you have walked into (LearnDungeonPlace, called
+--    on zoning), kept in AlliesJournalDB.instanceNames.
+-- /aj dungeons [place] says what each source found (developer tools).
+local KNOWN_DUNGEON_PLACES = {
+    "Ragefire Chasm", "Wailing Caverns", "The Wailing Caverns", "Deadmines", "The Deadmines",
+    "Shadowfang Keep", "Blackfathom Deeps", "The Stockade", "Stormwind Stockade", "Gnomeregan",
+    "Razorfen Kraul", "Razorfen Downs", "Scarlet Monastery", "Uldaman", "Zul'Farrak", "Maraudon",
+    "Sunken Temple", "The Temple of Atal'Hakkar", "Blackrock Depths", "Blackrock Spire",
+    "Lower Blackrock Spire", "Upper Blackrock Spire", "Dire Maul", "Scholomance", "Stratholme",
+    "Alcaz Prison", "Blackrook Hold",
+    "Molten Core", "Onyxia's Lair", "Blackwing Lair", "Zul'Gurub", "Ruins of Ahn'Qiraj",
+    "Ahn'Qiraj Temple", "Temple of Ahn'Qiraj", "Naxxramas",
+}
+
+local function PlaceKey(place)
+    if type(place) ~= "string" then return nil end
+    local key = place:match("^%s*(.-)%s*$"):lower()
+    return key ~= "" and key or nil
+end
+
+-- The dungeons and raids you have walked into. The first version of this
+-- (dungeonNames) also saved the zone name read as you zoned in, which can
+-- still be the zone outside at that moment (it saved Feralas for Dire
+-- Maul), so that table is dropped rather than trusted.
+local function LearnedInstanceNames()
+    if not AlliesJournalDB then return {} end
+    AlliesJournalDB.dungeonNames = nil
+    AlliesJournalDB.instanceNames = AlliesJournalDB.instanceNames or {}
+    return AlliesJournalDB.instanceNames
+end
+
+-- The Dungeon Finder's own list: single dungeons and raids only (not the
+-- random queues, scenarios or holiday bosses). Static game data, but read
+-- through pcall in case a client doesn't have it.
+local LFG_TYPE_DUNGEON = TYPEID_DUNGEON or 1
+local LFG_SUBTYPES = {
+    [LFG_SUBTYPEID_DUNGEON or 1] = true, [LFG_SUBTYPEID_HEROIC or 2] = true,
+    [LFG_SUBTYPEID_RAID or 3] = true, [LFG_SUBTYPEID_FLEXRAID or 5] = true,
+}
+local function AddFinderDungeons(add)
+    if not GetLFGDungeonInfo then return end
+    for id = 1, 4000 do
+        local ok, name, typeID, subtypeID = pcall(GetLFGDungeonInfo, id)
+        if ok and type(name) == "string" and typeID == LFG_TYPE_DUNGEON and LFG_SUBTYPES[subtypeID] then
+            add(name, "Dungeon Finder")
+        end
+    end
+end
+
+-- [place key] = where the name came from. Built once; built again a
+-- minute later if the Dungeon Finder had nothing yet.
+function addon:DungeonPlaces()
+    local cached = self.dungeonPlaces
+    if cached and (cached.finderCount > 0 or GetTime() - cached.builtAt < 60) then
+        return cached.places
+    end
+    local places, finderCount = {}, 0
+    local function Add(name, source)
+        local key = PlaceKey(name)
+        if key and key ~= "unknown" and key ~= "manual" and not places[key] then
+            places[key] = source
+            if source == "Dungeon Finder" then finderCount = finderCount + 1 end
+        end
+    end
+    -- The game's list first, so /aj dungeons shows what it really covers.
+    pcall(AddFinderDungeons, Add)
+    for _, name in ipairs(KNOWN_DUNGEON_PLACES) do Add(name, "built-in list") end
+    for _, session in pairs(self.db.global.sessions or {}) do
+        if session.dungeon then Add(session.zone, "your dungeon sessions") end
+    end
+    for name in pairs(LearnedInstanceNames()) do Add(name, "dungeons you went into") end
+    self.dungeonPlaces = { places = places, finderCount = finderCount, builtAt = GetTime() }
+    return places
+end
+
+-- Truthy (the source's name) when the place is a dungeon or raid.
+function addon:IsDungeonPlace(place)
+    local key = PlaceKey(place)
+    return key and self:DungeonPlaces()[key] or false
+end
+
+-- Called while inside a dungeon or raid, with GetInstanceInfo's name.
+function addon:LearnDungeonPlace(place)
+    local key = PlaceKey(place)
+    if not key or key == "unknown" or not AlliesJournalDB then return end
+    LearnedInstanceNames()[place] = true
+    local cached = self.dungeonPlaces
+    if cached and not cached.places[key] then cached.places[key] = "dungeons you went into" end
+end
+
+-- /aj dungeons [place]: whether a place counts as a dungeon, or with no
+-- place, everything each source found, in a window to copy from.
+function addon:DescribeDungeonPlaces(place)
+    self.dungeonPlaces = nil
+    local places = self:DungeonPlaces()
+    if place and place ~= "" then
+        local source = places[PlaceKey(place) or ""]
+        self:Print(source and (place .. " counts as a dungeon or raid (from " .. source .. ").")
+            or (place .. " isn't known as a dungeon or raid, so players there aren't shown in blue."))
+        return
+    end
+    local bySource, order, total = {}, {}, 0
+    for key, source in pairs(places) do
+        total = total + 1
+        if not bySource[source] then
+            bySource[source] = {}
+            table.insert(order, source)
+        end
+        table.insert(bySource[source], key)
+    end
+    table.sort(order)
+    local lines = {}
+    for _, source in ipairs(order) do
+        table.sort(bySource[source])
+        table.insert(lines, string.format("%s (%d):", source, #bySource[source]))
+        table.insert(lines, "  " .. table.concat(bySource[source], ", "))
+        table.insert(lines, "")
+    end
+    self:Print(string.format("%d dungeon and raid names known (%d from the Dungeon Finder).",
+        total, self.dungeonPlaces.finderCount))
+    self:GetModule("Export"):ShowText("Dungeon and raid names", table.concat(lines, "\n"))
+end
+
 -- Your recorded outings, newest first. A "run" is one dungeon run, or one
 -- stretch of playing together in the open world. Sessions saved since
 -- 1.2.0 carry which one they belong to (session.run, see RosterTracker:

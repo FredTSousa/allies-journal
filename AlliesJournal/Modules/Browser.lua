@@ -332,15 +332,42 @@ local function RatingText(axis, rating)
     return color .. addon:RatingWord(axis, rating) .. "|r"
 end
 
+-- Where an online player is when that's inside a dungeon or raid
+-- (addon:IsDungeonPlace): they're busy, so probably not someone to whisper
+-- or invite right now. nil when offline, out in the world, or unknown.
+-- Only as fresh as the location it reads: Recent Allies' can lag behind
+-- like its online status does (see the Refresh button).
+local function BusyPlaceOf(allyData)
+    local state = allyData and allyData.stateData
+    if not (state and state.isOnline) then return nil end
+    local place = state.currentLocation
+    if addon:IsDungeonPlace(place) then return place end
+    return nil
+end
+
+local BUSY_COLOR = { 0.45, 0.62, 1 }
+local BUSY_HEX = "|cff739eff"
+-- The game's dungeon map icon in front of the place, if this client has it.
+local busyIcon
+local function BusyIcon()
+    if busyIcon == nil then
+        local ok, info = pcall(function() return C_Texture.GetAtlasInfo("Dungeon") end)
+        busyIcon = (ok and info) and "|A:Dungeon:14:14|a" or ""
+    end
+    return busyIcon
+end
+
 -- Card accent bar = online status, matching the status icon: green online,
--- yellow away, red do-not-disturb, gray offline, darker gray when Recent
--- Allies has no entry for them. (The review is the star badge, not this.)
+-- blue online but in a dungeon or raid, yellow away, red do-not-disturb,
+-- gray offline, darker gray when Recent Allies has no entry for them. (The
+-- review is the star badge, not this.)
 local function StatusAccentFor(allyData)
     if not allyData then return { 0.3, 0.3, 0.32 } end
     local state = allyData.stateData
     if not state or not state.isOnline then return { 0.5, 0.5, 0.55 } end
     if state.isDND then return { 1, 0.25, 0.25 } end
     if state.isAFK then return { 1, 0.82, 0 } end
+    if BusyPlaceOf(allyData) then return BUSY_COLOR end
     return { 0.25, 1, 0.25 }
 end
 
@@ -527,7 +554,10 @@ local function InfoTextFor(allyData)
     if char.level then table.insert(parts, "Lvl " .. char.level) end
     local _, className = GetClassColor(char.classID)
     if className then table.insert(parts, className) end
-    if state.isOnline and state.currentLocation and state.currentLocation ~= "" then
+    if BusyPlaceOf(allyData) then
+        -- In a dungeon or raid: icon and the card bar's blue.
+        table.insert(parts, BusyIcon() .. BUSY_HEX .. state.currentLocation .. "|r")
+    elseif state.isOnline and state.currentLocation and state.currentLocation ~= "" then
         table.insert(parts, state.currentLocation)
     end
     if #parts == 0 then return "" end
@@ -614,8 +644,9 @@ function Browser:OnEnable()
     -- (the only event for a Battle.net friend who is already online entering
     -- the game) and RECENT_ALLY_DATA_UPDATED both fire constantly, so the
     -- list is batched and only redrawn when someone's status really changed.
-    -- For Recent Allies that's online, AFK and DND: changing zone alone
-    -- doesn't redraw. self.lastStatuses is the last one seen while the list
+    -- For Recent Allies that's online, AFK, DND and going into or out of a
+    -- dungeon: changing zone in the open world alone doesn't redraw.
+    -- self.lastStatuses is the last one seen while the list
     -- was open; Show clears it, since nothing is compared while it's closed.
     local function StatusSignature()
         local parts = {}
@@ -628,7 +659,7 @@ function Browser:OnEnable()
             local char, state = ally.characterData, ally.stateData
             if char and state then
                 table.insert(parts, "r:" .. tostring(char.guid) .. tostring(state.isOnline)
-                    .. tostring(state.isAFK) .. tostring(state.isDND))
+                    .. tostring(state.isAFK) .. tostring(state.isDND) .. tostring(BusyPlaceOf(ally)))
             end
         end
         table.sort(parts)
@@ -1578,8 +1609,16 @@ function Browser:ShowCardMenu(owner, nameRealm)
         addon:Print("The game's menu isn't available here - use the buttons under their name.")
         return
     end
+    -- Same status the card shows, so a warning sits right above Whisper and
+    -- Invite when they're busy in a dungeon or raid.
+    local status = BestStatus(FriendStatusOf(addon:GetFriendStatuses(), nameRealm), FindRecentAlly(nameRealm))
+        or addon:GetModule("WhoCheck"):GetPseudoAlly(nameRealm)
+    local busyPlace = BusyPlaceOf(status)
     MenuUtil.CreateContextMenu(owner, function(_, root)
         root:CreateTitle(addon:DisplayName(nameRealm))
+        if busyPlace then
+            root:CreateTitle(BUSY_HEX .. "In " .. busyPlace .. " right now|r")
+        end
         for _, action in ipairs(self:PlayerActions(nameRealm)) do
             root:CreateButton(action.text, action.run)
         end
