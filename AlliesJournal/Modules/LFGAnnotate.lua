@@ -371,7 +371,7 @@ local function UpdateRowBadge(row, textCounter, activeFrames, foreverWindow)
                         -- reviewed one, since that's not otherwise
                         -- visible anywhere on the row.
                         innerFrame.AlliesJournalMemberNote = (not isLeader)
-                            and ("|cffffd100Group member:|r " .. memberName) or ""
+                            and ("|cffffd100Group member:|r " .. (addon:IsFakeNames() and addon:DisplayName(memberName) or memberName)) or ""
                         SetupRowHover(innerFrame)
                         local b = addon.db.global.settings.badge
                         -- "name" (the matched FontString) is the default

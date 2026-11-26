@@ -397,6 +397,7 @@ local DEV_COMMANDS = {
     recentallydebug = true,
     allyinfo = true,
     badgetest = true,
+    fakenames = true,
     export = true,
     import = true,
 }
@@ -514,9 +515,9 @@ function AlliesJournal:SlashCommand(input)
         local settings = self.db.global.settings
         settings.paused = not settings.paused
         self:Print(settings.paused and "Recording paused: no new sessions or automatic note windows. /aj pause again to resume." or "Recording resumed.")
-    elseif cmd == "backup" then
         -- The journal's title says when recording is paused.
         self:GetModule("Browser"):UpdateTitle()
+    elseif cmd == "backup" then
         local entry = self:GetModule("Backup"):Snapshot("manual")
         self:Print("Backed up your journal: " .. self:GetModule("Backup"):Describe(entry) .. ". Restore from /aj options.")
     elseif cmd == "chatstar" then
@@ -537,6 +538,11 @@ function AlliesJournal:SlashCommand(input)
         self:DumpRecentAllyDetails(rest)
     elseif cmd == "badgetest" then
         self:GetModule("Tooltip"):ToggleBadgeTest()
+    elseif cmd == "fakenames" then
+        self.fakeNames = not self.fakeNames
+        self:Print(self.fakeNames and "Made-up names ON for screenshots: the journal, note window, Runs, In numbers and the addon's chat lines show invented names and guilds. Nameplates, unit frames and chat senders are drawn by the game and keep real names. Reopen any open window. Off again after a /reload."
+            or "Made-up names off. Reopen any open window.")
+        pcall(function() self:GetModule("Browser"):RefreshIfShown() end)
     elseif cmd == "pinjournal" then
         self:PinReviewedAllies()
     elseif cmd == "resyncrecentallies" then
@@ -589,6 +595,7 @@ function AlliesJournal:SlashCommand(input)
             self:Print("  /pr recentallydebug - toggle live logging of what SetRecentAllyPinned/SetRecentAllyNote actually return when a review is saved, to debug a pin/note that isn't sticking")
             self:Print("  /aj allyinfo [name] - dump EVERYTHING Recent Allies knows about a player (every interaction with its type, location, difficulty, item, plus raw data) and what Battle.net reports for them into a copyable window; defaults to the selected player or your target")
             self:Print("  /aj badgetest - toggle a fake badge on every party/raid frame and nameplate found, to check placement without a group")
+            self:Print("  /aj fakenames - toggle made-up player and guild names everywhere the addon draws them, for screenshots of a real journal (display only, off after a /reload)")
         end
     end
 end

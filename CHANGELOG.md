@@ -8,6 +8,7 @@
 - With it on, **Friends at the top of the list** (on by default) orders the list as online friends, then everyone else who's online, then offline friends, then the rest.
 - Battle.net only says which character a friend is playing while they're online. Once the journal has seen a friend online on your server and faction with the switch on, it shows them as that character when they're offline too. It stores this without their BattleTag.
 - New switch in `/aj options`, Notes tab, under **When the note window opens**: **Don't ask about my friends**. Friends are left out of the note window, the Add a note line in chat, and the recap after a short group. Their sessions are still recorded, and right-clicking their name still writes a note. It's off by default. `/aj why <name>` says when this is why someone wasn't asked.
+- `/aj pause` now shows "Recording paused" in the journal's title straight away, even with the journal open.
 
 ## 1.5.0
 

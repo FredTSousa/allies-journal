@@ -66,10 +66,10 @@ function WhoCheck:ButtonState()
     local position = string.format("(%d/%d)", done + 1, self.total)
 
     if self.pending then
-        return string.format("Checking %s %s", addon:GetShortName(self.pending), position), true
+        return string.format("Checking %s %s", addon:DisplayName(self.pending), position), true
     end
 
-    local nextName = self.queue[1] and addon:GetShortName(self.queue[1]) or "next"
+    local nextName = self.queue[1] and addon:DisplayName(self.queue[1]) or "next"
     local wait = math.ceil(QUERY_GAP - (GetTime() - (self.lastSent or -QUERY_GAP)))
     if wait > 0 then
         return string.format("Wait %ds - %s %s", wait, nextName, position), true
@@ -88,14 +88,14 @@ function WhoCheck:ProgressLines()
     local lines = {}
     for nameRealm, status in pairs(self.checkedThisRun or {}) do
         local color = status and "|cff40ff40" or "|cff909090"
-        table.insert(lines, color .. addon:GetShortName(nameRealm) .. (status and " - online" or " - not found") .. "|r")
+        table.insert(lines, color .. addon:DisplayName(nameRealm) .. (status and " - online" or " - not found") .. "|r")
     end
     table.sort(lines)
     if self.pending then
-        table.insert(lines, "|cffffd100" .. addon:GetShortName(self.pending) .. " - waiting for reply...|r")
+        table.insert(lines, "|cffffd100" .. addon:DisplayName(self.pending) .. " - waiting for reply...|r")
     end
     for _, nameRealm in ipairs(self.queue) do
-        table.insert(lines, addon:GetShortName(nameRealm))
+        table.insert(lines, addon:DisplayName(nameRealm))
     end
     return lines
 end
@@ -212,8 +212,8 @@ function WhoCheck:Resolve(nameRealm, info)
     if #self.queue == 0 then
         self:Finish()
     else
-        addon:Print(string.format("%s: %s. Next up: %s.", addon:GetShortName(nameRealm),
-            info and "online" or "not found", addon:GetShortName(self.queue[1])))
+        addon:Print(string.format("%s: %s. Next up: %s.", addon:DisplayName(nameRealm),
+            info and "online" or "not found", addon:DisplayName(self.queue[1])))
         browser:UpdateWhoButton()
     end
 end

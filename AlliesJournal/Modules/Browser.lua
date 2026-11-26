@@ -508,7 +508,7 @@ end
 -- Class-colored short name when we have class data for them, plain
 -- short name otherwise.
 local function ColoredShortName(nameRealm, allyData)
-    local shortName = addon:GetShortName(nameRealm) or nameRealm
+    local shortName = addon:DisplayName(nameRealm) or nameRealm
     local classColor = allyData and allyData.characterData and GetClassColor(allyData.characterData.classID)
     if classColor and classColor.colorStr then
         return "|c" .. classColor.colorStr .. shortName .. "|r"
@@ -1579,7 +1579,7 @@ function Browser:ShowCardMenu(owner, nameRealm)
         return
     end
     MenuUtil.CreateContextMenu(owner, function(_, root)
-        root:CreateTitle(addon:GetShortName(nameRealm))
+        root:CreateTitle(addon:DisplayName(nameRealm))
         for _, action in ipairs(self:PlayerActions(nameRealm)) do
             root:CreateButton(action.text, action.run)
         end
@@ -1604,7 +1604,7 @@ function Browser:ShowCardMenu(owner, nameRealm)
         -- Nothing to forget for a friend with no record.
         if record then
             root:CreateButton("Forget player", function()
-                StaticPopup_Show("ALLIESJOURNAL_FORGET_PLAYER", addon:GetShortName(nameRealm), nil, { nameRealm = nameRealm })
+                StaticPopup_Show("ALLIESJOURNAL_FORGET_PLAYER", addon:DisplayName(nameRealm), nil, { nameRealm = nameRealm })
             end)
         end
     end)
@@ -1729,8 +1729,8 @@ function Browser:ShowHistory(nameRealm)
         end
         local text = "|cffffd100How you met:|r " .. (#who > 0 and (table.concat(who, " ") .. ", ") or "")
         text = text .. (record.met.zone and ("in " .. record.met.zone .. " ") or "") .. GRAY .. "on " .. date("%Y-%m-%d", record.met.date or time()) .. "|r"
-        if record.met.character then text = text .. GRAY .. "  on " .. record.met.character .. "|r" end
-        if record.guild then text = text .. GRAY .. "   -   Guild: " .. record.guild .. "|r" end
+        if record.met.character then text = text .. GRAY .. "  on " .. addon:DisplayName(record.met.character) .. "|r" end
+        if record.guild then text = text .. GRAY .. "   -   Guild: " .. addon:DisplayGuild(record.guild) .. "|r" end
         local met = AceGUI:Create("Label")
         met:SetFullWidth(true)
         met:SetText(text)
@@ -1869,11 +1869,11 @@ function Browser:ShowHistory(nameRealm)
                 local lines = {}
                 for _, msg in ipairs(review.chat or {}) do
                     table.insert(lines, string.format("[%s] %s (%s): %s",
-                        date("%H:%M", msg.time), msg.from == "self" and "You" or addon:GetShortName(nameRealm),
+                        date("%H:%M", msg.time), msg.from == "self" and "You" or addon:DisplayName(nameRealm),
                         msg.channel, msg.text))
                 end
                 if #lines == 0 then lines = { "(no chat captured for this note)" } end
-                addon:GetModule("Export"):ShowText("Chat - " .. nameRealm .. " - " .. dateStr, table.concat(lines, "\n"))
+                addon:GetModule("Export"):ShowText("Chat - " .. addon:DisplayFullName(nameRealm) .. " - " .. dateStr, table.concat(lines, "\n"))
             end)
             row:AddChild(chatBtn)
         end
@@ -1889,7 +1889,7 @@ function Browser:ShowHistory(nameRealm)
                     (InteractionDetails(interaction):gsub("|c%x%x%x%x%x%x%x%x", ""):gsub("|r", ""))))
             end
             if #lines == 0 then lines = { "(Recent Allies has nothing logged for this player during this note's session)" } end
-            addon:GetModule("Export"):ShowText("Together - " .. nameRealm .. " - " .. dateStr, table.concat(lines, "\n"))
+            addon:GetModule("Export"):ShowText("Together - " .. addon:DisplayFullName(nameRealm) .. " - " .. dateStr, table.concat(lines, "\n"))
         end)
         -- Duplicates the "Together (Recent Allies)" section above, so it
         -- only shows with developer tools on (useful for copying the
@@ -1912,7 +1912,7 @@ function Browser:ShowHistory(nameRealm)
         deleteBtn:SetText(L["Delete"])
         deleteBtn:SetWidth(70)
         deleteBtn:SetCallback("OnClick", function()
-            StaticPopup_Show("ALLIESJOURNAL_DELETE_REVIEW", addon:GetShortName(nameRealm), dateStr,
+            StaticPopup_Show("ALLIESJOURNAL_DELETE_REVIEW", addon:DisplayName(nameRealm), dateStr,
                 { nameRealm = nameRealm, reviewID = reviewID })
         end)
         row:AddChild(deleteBtn)
@@ -1957,7 +1957,7 @@ function Browser:ShowHistory(nameRealm)
         label:SetFullWidth(true)
         local lines = {
             string.format("|cffffd100%s|r  %s%s%s|r", session.zone or "Unknown", GRAY, dateStr,
-                session.character and ("  on " .. session.character) or ""),
+                session.character and ("  on " .. addon:DisplayName(session.character)) or ""),
             string.format("Grouped %s  -  in combat %s", FormatDuration(session.groupedSeconds), FormatDuration(session.combatSeconds)),
         }
         local dmg = StatLine("Damage", "DPS", session.dps, session.groupMaxDps, session.groupTotalDps)

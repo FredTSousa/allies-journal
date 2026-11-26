@@ -131,9 +131,9 @@ function Notices:PlayerJoined(nameRealm, classFile)
     if not description then return end
     if OnCooldown(self, "join", nameRealm, JOIN_COOLDOWN) then return end
 
-    addon:Print(string.format("%s joined - %s", ColoredName(addon:GetShortName(nameRealm), classFile), description))
+    addon:Print(string.format("%s joined - %s", ColoredName(addon:DisplayName(nameRealm), classFile), description))
     if s.joinPanel then
-        self:QueuePanelLine(string.format("%s - %s", ColoredName(addon:GetShortName(nameRealm), classFile),
+        self:QueuePanelLine(string.format("%s - %s", ColoredName(addon:DisplayName(nameRealm), classFile),
             self:Describe(nameRealm, true) or description))
     end
 
@@ -143,7 +143,7 @@ function Notices:PlayerJoined(nameRealm, classFile)
         local axis = review.mode == "simple" and "simple" or "social"
         pcall(function()
             UIErrorsFrame:AddMessage(string.format("Heads up: %s is in your group (you noted: %s)",
-                addon:GetShortName(nameRealm), addon:RatingWord(axis, review.social)), 1, 0.3, 0.3, 1, 6)
+                addon:DisplayName(nameRealm), addon:RatingWord(axis, review.social)), 1, 0.3, 0.3, 1, 6)
             PlaySound((SOUNDKIT and SOUNDKIT.RAID_WARNING) or 8959)
         end)
     end
@@ -165,7 +165,7 @@ function Notices:FamiliarFaces(candidates, runId)
         if description then
             local okClass, _, classFile = pcall(GetPlayerInfoByGUID, c.guid)
             table.insert(entries, string.format("%s (%s)",
-                ColoredName(addon:GetShortName(nameRealm), okClass and classFile or nil), description))
+                ColoredName(addon:DisplayName(nameRealm), okClass and classFile or nil), description))
         end
     end
     if #entries == 0 then return end
@@ -292,7 +292,7 @@ function Notices:OnAllyUpdated(_, guid)
     if OnCooldown(self, "online", nameRealm, ONLINE_COOLDOWN) then return end
 
     local description = self:Describe(nameRealm)
-    addon:Print(string.format("%s is online%s", ColoredName(addon:GetShortName(nameRealm), ClassFileOf(ally)),
+    addon:Print(string.format("%s is online%s", ColoredName(addon:DisplayName(nameRealm), ClassFileOf(ally)),
         description and (" - " .. description) or ""))
 end
 

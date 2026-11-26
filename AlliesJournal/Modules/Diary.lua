@@ -79,7 +79,7 @@ local function AddMemberButtons(container, run)
     for _, nameRealm in ipairs(people) do
         local record = addon.db.global.players[nameRealm]
         local color = record and record.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[record.class]
-        local short = addon:GetShortName(nameRealm)
+        local short = addon:DisplayName(nameRealm)
         local text = (color and color.colorStr) and ("|c" .. color.colorStr .. short .. "|r") or short
         local existing = addon:GetReviewForSessions(nameRealm, run.sessionsByMember[nameRealm])
 
@@ -310,7 +310,7 @@ function Diary:ShowNumbers(period)
                     gap = math.max(gap or 0, dates[i] - dates[i - 1])
                 end
             end
-            table.insert(people, { nameRealm = nameRealm, name = addon:GetShortName(nameRealm),
+            table.insert(people, { nameRealm = nameRealm, name = addon:DisplayName(nameRealm),
                 seconds = seconds, count = count, total = total, first = first, gap = gap })
         end
     end
@@ -703,7 +703,7 @@ function Diary:ShowNearby()
         row:SetLayout("Flow")
 
         local color = e.class and RAID_CLASS_COLORS and RAID_CLASS_COLORS[e.class]
-        local name = addon:GetShortName(item.nameRealm)
+        local name = addon:DisplayName(item.nameRealm)
         if color and color.colorStr then name = "|c" .. color.colorStr .. name .. "|r" end
         local className = e.class and LOCALIZED_CLASS_NAMES_MALE and LOCALIZED_CLASS_NAMES_MALE[e.class] or e.class
         local details = {}

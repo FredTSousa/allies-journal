@@ -657,7 +657,7 @@ function RosterTracker:OnRosterUpdate()
                 -- would otherwise show up at all.
                 if not raidContext and addon.db.global.settings.departureSummary.enabled and groupedSeconds < gateSeconds
                     and not self:SkipsAsFriend(d.data.nameRealm, d.guid) then
-                    local shortName = addon:GetShortName(d.data.nameRealm)
+                    local shortName = addon:DisplayName(d.data.nameRealm)
                     local link = string.format("|Hplayer:%s|h[%s]|h", d.data.nameRealm, shortName)
                     -- Class-colored like a normal chat name. GUID-based, so
                     -- it still works now that they've left the group;
@@ -1291,7 +1291,7 @@ function RosterTracker:ExplainPrompt(input)
     end
     local now = time()
     local settings = addon.db.global.settings
-    addon:Print("Note window for " .. addon:GetShortName(nameRealm) .. ":")
+    addon:Print("Note window for " .. addon:DisplayName(nameRealm) .. ":")
 
     -- What happened each time a trigger looked at them.
     local log = AlliesJournalDB.promptLog and AlliesJournalDB.promptLog[nameRealm]

@@ -71,8 +71,8 @@ function ChatMarkers:Preview()
         if #record.reviews > 0 then
             local review = addon:GetLatestReview(nameRealm)
             if review then
-                addon:Print(string.format("[%s]: %sthis is how %s's chat line looks", addon:GetShortName(nameRealm),
-                    Marker(nameRealm, review), addon:GetShortName(nameRealm)))
+                addon:Print(string.format("[%s]: %sthis is how %s's chat line looks", addon:DisplayName(nameRealm),
+                    Marker(nameRealm, review), addon:DisplayName(nameRealm)))
                 shown = shown + 1
                 if shown >= 4 then return end
             end

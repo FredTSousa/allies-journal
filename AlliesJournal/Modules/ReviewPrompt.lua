@@ -469,9 +469,9 @@ function ReviewPrompt:BuildFrameInner()
     self:HideChartRows()
     outer:ReleaseChildren()
     outer:SetTitle(self.editingReviewID
-        and ("Edit Note: " .. addon:GetShortName(data.nameRealm))
-        or inGroup and string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.groupIndex, #self.group)
-        or string.format("Journal: %s   %d of %d", addon:GetShortName(data.nameRealm), self.shownCount, self.batchTotal))
+        and ("Edit Note: " .. addon:DisplayName(data.nameRealm))
+        or inGroup and string.format("Journal: %s   %d of %d", addon:DisplayName(data.nameRealm), self.groupIndex, #self.group)
+        or string.format("Journal: %s   %d of %d", addon:DisplayName(data.nameRealm), self.shownCount, self.batchTotal))
     outer:Show()
 
     -- Scrollable so a long form doesn't overflow the fixed-height window.
@@ -1117,7 +1117,7 @@ function ReviewPrompt:AddFightSelectionSection(frame, data)
                 r, g, b = classColor.r, classColor.g, classColor.b
             end
 
-            row.nameText:SetText(addon:GetShortName(m.nameRealm))
+            row.nameText:SetText(addon:DisplayName(m.nameRealm))
             row.nameText:SetTextColor(r, g, b)
             row.bar:SetStatusBarColor(r, g, b)
             row.bg:SetColorTexture(0.15, 0.15, 0.15, 0.8)
@@ -1330,7 +1330,7 @@ end
 -- between people; each keeps their own form until saved or skipped.
 
 local function ClassColoredName(data)
-    local shortName = addon:GetShortName(data.nameRealm)
+    local shortName = addon:DisplayName(data.nameRealm)
     local ok, _, classFile = pcall(GetPlayerInfoByGUID, data.guid)
     local color = ok and classFile and RAID_CLASS_COLORS and RAID_CLASS_COLORS[classFile]
     if color and color.colorStr then return "|c" .. color.colorStr .. shortName .. "|r" end
@@ -1373,7 +1373,7 @@ end
 function ReviewPrompt:CreateGroupTabs(height)
     local entries = {}
     for index, member in ipairs(self.group) do
-        local short = addon:GetShortName(member.data.nameRealm)
+        local short = addon:DisplayName(member.data.nameRealm)
         local text
         if member.status == "saved" then
             text = "|TInterface\\Buttons\\UI-CheckBox-Check:14|t |cff40ff40" .. short .. "|r"
@@ -1579,7 +1579,7 @@ function ReviewPrompt:Remind()
     if not self:HasWaiting() then return end
     local names = {}
     for _, member in ipairs(self.group) do
-        if member.status == "pending" then table.insert(names, addon:GetShortName(member.data.nameRealm)) end
+        if member.status == "pending" then table.insert(names, addon:DisplayName(member.data.nameRealm)) end
     end
     addon:Print(string.format("You still have %d note%s to write: %s. %s",
         #names, #names == 1 and "" or "s", NameList(names), NOTES_LINK))

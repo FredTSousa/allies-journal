@@ -191,6 +191,81 @@ function addon:GetShortName(nameRealm)
     return nameRealm and nameRealm:match("^[^-]+") or nameRealm
 end
 
+-- Screenshot names (developer tool, /aj fakenames). While on, every name
+-- the addon draws itself is swapped for a made-up one, so screenshots of a
+-- real journal don't show real players. Display only: nothing saved
+-- changes, and whisper, invite, /who, search and matching keep using the
+-- real name through GetShortName. Names the game draws (nameplates, unit
+-- frames, chat senders, Group Finder leaders) are out of reach.
+--
+-- The made-up name is worked out from the real one, so a person gets the
+-- same name in every window and across a /reload. It is off after a
+-- /reload on purpose, so it can't be left on by accident.
+local FAKE_FIRST = {
+    "Alder", "Bram", "Cael", "Dara", "Edda", "Fenn", "Gale", "Hale", "Iri", "Joss",
+    "Kell", "Lune", "Mira", "Nix", "Orin", "Pell", "Quill", "Rook", "Sable", "Tarn",
+    "Ula", "Vane", "Wren", "Yara", "Zev", "Ash", "Brin", "Corra", "Dell", "Esk",
+    "Fira", "Garr", "Holt", "Ilsa", "Jory", "Kip", "Lark", "Moss", "Nell", "Oda",
+}
+local FAKE_LAST = {
+    "Ambervale", "Briarwood", "Coldwater", "Dunmore", "Emberfall", "Fairwind", "Greywatch", "Hollowell",
+    "Ironbark", "Jadeleaf", "Kettleby", "Longstride", "Marrow", "Northgate", "Oakhollow", "Pinecrest",
+    "Quickbrook", "Redfern", "Stonefield", "Thistledown", "Underhill", "Vintner", "Westmere", "Yarrow",
+    "Ashdown", "Blackmoor", "Copperpot", "Deepwell", "Eastcliff", "Foxglove", "Goldmere", "Highfen",
+    "Ivywood", "Kestrel", "Lowmarsh", "Millrace", "Nettle", "Oldbridge", "Peatmoss", "Rushford",
+}
+local FAKE_GUILDS = {
+    "Lantern Watch", "The Long Road", "Hearthside", "Second Wind", "Quiet Company", "Off the Map",
+    "Borrowed Time", "The Late Shift", "Campfire Tales", "Loose Change", "Fair Weather", "Odd Hours",
+}
+local fakeByKey, fakeTaken = {}, {}
+
+local function NameHash(text)
+    local h = 5381
+    for i = 1, #text do h = (h * 33 + text:byte(i)) % 2147483647 end
+    return h
+end
+
+local function FakeNameFor(shortName)
+    local key = shortName:lower()
+    local fake = fakeByKey[key]
+    if fake then return fake end
+    local h, firsts, lasts = NameHash(key), #FAKE_FIRST, #FAKE_LAST
+    -- Two people can land on the same made-up name; step on until a free
+    -- one turns up.
+    for try = 0, firsts * lasts - 1 do
+        local index = h + try
+        local candidate = FAKE_FIRST[index % firsts + 1] .. " " .. FAKE_LAST[math.floor(index / firsts) % lasts + 1]
+        if not fakeTaken[candidate] then fake = candidate; break end
+    end
+    fake = fake or ("Player " .. h % 10000)
+    fakeByKey[key], fakeTaken[fake] = fake, true
+    return fake
+end
+
+function addon:IsFakeNames()
+    return self.fakeNames and true or false
+end
+
+-- The short name to put on screen. Takes "Name-Realm" or a plain name
+-- (the character names saved with sessions).
+function addon:DisplayName(nameRealm)
+    local short = self:GetShortName(nameRealm)
+    if not self.fakeNames or type(short) ~= "string" or short == "" then return short end
+    return FakeNameFor(short)
+end
+
+-- "Name-Realm" for on-screen text, realm part kept.
+function addon:DisplayFullName(nameRealm)
+    if not self.fakeNames or type(nameRealm) ~= "string" then return nameRealm end
+    return self:DisplayName(nameRealm) .. (nameRealm:match("(%-.+)$") or "")
+end
+
+function addon:DisplayGuild(guild)
+    if not self.fakeNames or type(guild) ~= "string" or guild == "" then return guild end
+    return FAKE_GUILDS[NameHash(guild:lower()) % #FAKE_GUILDS + 1]
+end
+
 function addon:GetOrCreatePlayer(nameRealm)
     local players = self.db.global.players
     local record = players[nameRealm]
@@ -557,7 +632,7 @@ end
 function addon:SyncRecentAlly(guid, review, nameRealm, quiet)
     if not self:ShouldPinReview(review) then
         if not quiet then
-            self:Print((self:GetShortName(nameRealm) or "Player") .. " is marked 'Not for me' or 'Struggled', so they aren't pinned in Recent Allies (change this in /aj options).")
+            self:Print((self:DisplayName(nameRealm) or "Player") .. " is marked 'Not for me' or 'Struggled', so they aren't pinned in Recent Allies (change this in /aj options).")
         end
         return false
     end
@@ -578,7 +653,7 @@ function addon:SyncRecentAlly(guid, review, nameRealm, quiet)
         return
     end
 
-    local name = self:GetShortName(nameRealm) or "player"
+    local name = self:DisplayName(nameRealm) or "player"
     -- Copied: callers pass a live form table that gets replaced later.
     local snapshot = {
         social = review.social, performance = review.performance, mode = review.mode,
